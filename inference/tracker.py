@@ -1,121 +1,97 @@
-
-import argparse as ap
-import cv2
 import numpy as np
-from ultralytics import YOLO
 import supervision as sv
-from sort.sort import Sort
-from sklearn.cluster import KMeans
+#from sort.sort import Sort
 
 class Tracker:
 
     def __init__(self,model):
-        self.detections=[]
         self.model = model
-        self.tracker = Sort()
+        self.tracker = sv.ByteTrack()
+        self.clases = {'ball': 0, 'goalkeeper': 1, 'player': 2, 'referee': 3}
 
-    def detect_frame(self,frame):
 
-        #Detecta objetos en un frame y devuelve las detecciones en formato supervision 
 
-        results = self.model.predict(frame)
-        detections = sv.Detections.from_ultralytics(results)
+    #   Detecta objetos en varios frames y devuelve las detecciones en formato supervision 
+
+    def detect_frames(self,frames):
+
+        #prediciciones con el modelo
+        results = self.model.predict(frames,device="cuda")
+
+        ''' Se pasan los resultados a formato sv detections
+            Formato Detections[[bbox][mask][confidence][clase d los obj detectados num][track_id][{'class_name': array('player', ...)}]] 
+             El último array contiene el nombre de las clases de los objetos detectados'''
+        
+            
+        #Convertir cada resultado a Detections y mantener el orden con una lista detections[0] = resultados del frame 0    
+        detections = [sv.Detections.from_ultralytics(res) for res in results]
+
+        #print(detections[0])
         return detections
-    
-    def get_team_color(self, frame,x1, y1, x2, y2,k = 3):
-        
-        print("Calculando color del equipo...")
-        #Calcular ancho y alto
-        w = x2 - x1
-        h = y2 - y1
 
-        # Extraer la mitad superior del bounding box
-        half_h = h // 2
-        roi = frame[y1:y1+half_h, x1:x2]
+    def update_detections(self, detections):
         
-        # Convertir ROI en una lista de píxeles
-        pixels = roi.reshape(-1, 3)
-        
-        # Aplicar K-Means
-        try:
-            kmeans = KMeans(n_clusters=k, n_init=10)
-            labels = kmeans.fit_predict(pixels)
+        tracked_batch =[]
+
+        for dets in detections:
+
+            #FORMTATO TRACKED_BATCH --> igual que detections pero con el track_id añadido 
+            tracked_batch += self.tracker.update_with_detections(dets)
+
+            players =[] # array de tuplas de jugadores (track_id, xyxy)
+            referees = []
+            goalkeepers = []
+            ball = []
+
+            tracked_frame = tracked_batch[-1]
+
+            for index in range(len(tracked_frame.track_ids)):
+                '''
+                if tracked_frame.class_ids[index] == self.clases['player']:
+                    players[tracked_frame.track_id[index]] =tracked_frame.xyxy[index]
+                elif tracked_frame.class_ids[index] == self.clases['referee']:                      aquí lo hice con un diccionario, en este caso, separo los actores por tipo 
+                    referees[tracked_frame.track_id[index]] =tracked_frame.xyxy[index]               pero necesito la lista de track_id además
+                elif tracked_frame.class_ids[index] == self.clases['goalkeeper']:
+                    goalkeepers[tracked_frame.track_id[index]] =tracked_frame.xyxy[index]
+                else:
+                    ball[tracked_frame.track_id[index]] =tracked_frame.xyxy[index]
             
-            # Contar frecuencia de cada cluster
-            unique, counts = np.unique(labels, return_counts=True)
-            dominant_cluster = unique[np.argmax(counts)]
-            dominant_color = kmeans.cluster_centers_[dominant_cluster]
-        
-            return tuple(map(int, dominant_color))  # Convertir a enteros
-        
-        except:
-            # Si K-Means falla, calcular color promedio
-            avg_color = np.mean(pixels, axis=0)
-            return tuple(map(int, avg_color))
-
-
-
-    def draw_player_marker(self, frame, tracked_objects):
-
-        print("Drawing player markers...")
-        for object in tracked_objects:
-            x1, y1, x2, y2, track_id, clase = object  # Asegúrate de que SORT devuelva track_id
+            paquete = [tracked_frame.track_ids, players, referees, goalkeepers, ball] 
             
-            if clase != 0: # Solo procesar jugadores (clase ?= 0)
-                break
+                '''
+                if tracked_frame.class_ids[index] == self.clases['player']:
+                    players.append(tracked_frame.track_ids[index], tracked_frame.xyxy[index])
+                elif tracked_frame.class_ids[index] == self.clases['referee']:
+                    referees.append(tracked_frame.track_ids[index], tracked_frame.xyxy[index])
+                elif tracked_frame.class_ids[index] == self.clases['goalkeeper']:  
+                    goalkeepers.append(tracked_frame.track_ids[index], tracked_frame.xyxy[index])
+                else:
+                    ball.append(tracked_frame.track_ids[index], tracked_frame.xyxy[index])
+            
+            #actores = [players, referees, goalkeepers, ball]
 
-            # Coordenadas del centro a los pies del jugador
-            center_x = int((x1 + x2) / 2)
-            center_y = int(y2)  # Parte inferior del bbox
+            ''' dibujar_jugadores(players, frame)
+            dibujar_arbitros(referees, frame)
+            señalizar_balón(ball, frame)
+            o por otro lado
+            dibujar_elemento(actores, frame)'''
 
-            # Tamaño del óvalo
-            width = int((x2 - x1) * 0.6)  # Ancho basado en el bbox
-            height = int((y2 - y1) * 0.2)  # Alto pequeño para que parezca un marcador a los pies
 
-            # Obtener color según el equipo
-            color = self.get_team_color(frame, x1, y1, x2, y2)
+        return tracked_batch
 
-            # Dibujar el óvalo en la imagen
-            cv2.ellipse(frame, (center_x, center_y), (width, height), 0, 0, 360, color, -1)
-
-        print("Player markers drawn.")
-        return frame
-    
     def detect_n_track(self, frames):
-
-        skip_frames = 20
-        frame_count = 0
-        tracked_frames = []
-
-        print("Detectando y rastreando objetos...")
-        print(len(frames))
-        for frame in frames:
-            print("punto 1")
-            if frame_count % skip_frames == 0:
-                
-                # Inferencia con YOLO cada 20 frames
-                sv_detections = self.detect_frame(frame)
-
-                # Aplicar tracking
-                dets = []
-                for i in range(len(sv_detections.xyxy)):
-                    x1, y1, x2, y2 = sv_detections.xyxy[i]
-                    clase = sv_detections.class_id[i]
-                    conf = sv_detections.confidence[i]
-                    dets.append([x1, y1, x2, y2, conf,clase])  
-                dets = np.array(dets)
-                # Aplicar tracker
-                tracked_objects = self.tracker.update(dets)
-                
-                
-            else:
-               
-                # Usar el tracker en frames intermedios
-                tracked_objects = self.tracker.update(np.empty((0, 5))) # No pasamos nuevas detecciones COMPROBAR EL SIZE DE ESTE ARRAY
-                print("Frame sin predicciones")
-            #pintar el frame
-            tracked_frames.append(self.draw_player_marker(frame, tracked_objects)) #<-- atemporal, elementos trackeados continuamente
-            frame_count += 1
         
-        print("Detección y rastreo completados.")
-        return tracked_frames
+        detections = []
+        for i in range(0, len(frames), 25):
+            #hilo 1
+            frame_batch = frames[i:i+25]
+            print(f"Procesando batch {i//25} con {len(frame_batch)} frames")
+            detections = self.detect_frames(frame_batch)
+           
+            #hilo 2
+            tracked_batch = self.update_detections(detections)
+            #print(tracked_batch)
+
+                            
+        return detections[0]
+        
