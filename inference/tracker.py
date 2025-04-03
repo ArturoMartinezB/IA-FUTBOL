@@ -1,4 +1,3 @@
-import numpy as np
 import supervision as sv
 #from sort.sort import Sort
 
@@ -8,7 +7,7 @@ class Tracker:
         self.model = model
         self.tracker = sv.ByteTrack()
         self.clases = {'ball': 0, 'goalkeeper': 1, 'player': 2, 'referee': 3}
-
+        self.track_order = {'bbox': 0, 'mask': 1, 'confidence': 2, 'class_id': 3, 'track_id': 4, 'class_name': 5} # orden de los elementos en el array de detecciones
 
 
     #   Detecta objetos en varios frames y devuelve las detecciones en formato supervision 
@@ -29,59 +28,71 @@ class Tracker:
         #print(detections[0])
         return detections
 
-    def update_detections(self, detections):
+    def get_tracks(self, detections):
         
-        tracked_batch =[]
+        tracked_batch =[] 
+        tracks_by_frame = {}
+        
+        for frame, dets in enumerate(detections):     #dets contiene las detecciones de un frame 
 
-        for dets in detections:
+            #print ("DETS = ", dets)
+            #FORMATO TRACKED_BATCH --> igual que detections pero con el track_id añadido 
+            tracked_batch.append(self.tracker.update_with_detections(dets))
 
-            #FORMTATO TRACKED_BATCH --> igual que detections pero con el track_id añadido 
-            tracked_batch += self.tracker.update_with_detections(dets)
-
-            players =[] # array de tuplas de jugadores (track_id, xyxy)
+            players =[] # lista de tuplas de jugadores (track_id, xyxy)
             referees = []
             goalkeepers = []
             ball = []
+            
+           
+            #print("Tracked_batch [-1]= ",tracked_batch[-1])
+            tracked_frame = tracked_batch[-1] # última detección del frame actual
+            print(tracked_frame)
+            
+            for tracks in tracked_frame:
+                
+                class_id = self.track_order['class_id']
+                track_id = self.track_order['track_id']
+                bbox = self.track_order['bbox']
 
-            tracked_frame = tracked_batch[-1]
+                if tracks[class_id] == self.clases['player']:
+                    players.append((tracks[track_id], tracks[bbox]))
 
-            for index in range(len(tracked_frame.track_ids)):
-                '''
-                if tracked_frame.class_ids[index] == self.clases['player']:
-                    players[tracked_frame.track_id[index]] =tracked_frame.xyxy[index]
-                elif tracked_frame.class_ids[index] == self.clases['referee']:                      aquí lo hice con un diccionario, en este caso, separo los actores por tipo 
-                    referees[tracked_frame.track_id[index]] =tracked_frame.xyxy[index]               pero necesito la lista de track_id además
-                elif tracked_frame.class_ids[index] == self.clases['goalkeeper']:
-                    goalkeepers[tracked_frame.track_id[index]] =tracked_frame.xyxy[index]
+                elif tracks[class_id] == self.clases['referee']:
+                    referees.append((tracks[track_id], tracks[bbox]))
+
+                elif tracks[class_id] == self.clases['goalkeeper']:  
+                    goalkeepers.append((tracks[track_id], tracks[bbox]))
+
                 else:
-                    ball[tracked_frame.track_id[index]] =tracked_frame.xyxy[index]
+                    ball.append((tracks[track_id], tracks[bbox]))
             
-            paquete = [tracked_frame.track_ids, players, referees, goalkeepers, ball] 
-            
-                '''
-                if tracked_frame.class_ids[index] == self.clases['player']:
-                    players.append(tracked_frame.track_ids[index], tracked_frame.xyxy[index])
-                elif tracked_frame.class_ids[index] == self.clases['referee']:
-                    referees.append(tracked_frame.track_ids[index], tracked_frame.xyxy[index])
-                elif tracked_frame.class_ids[index] == self.clases['goalkeeper']:  
-                    goalkeepers.append(tracked_frame.track_ids[index], tracked_frame.xyxy[index])
-                else:
-                    ball.append(tracked_frame.track_ids[index], tracked_frame.xyxy[index])
-            
-            #actores = [players, referees, goalkeepers, ball]
+            tracks_by_frame[frame] = {
+                'players':players, 
+                'referees':referees,
+                'goalkeepers': goalkeepers,
+                'ball': ball    
+            }
 
             ''' dibujar_jugadores(players, frame)
-            dibujar_arbitros(referees, frame)
+            dibujar_arbitros(referees, frame) 
             señalizar_balón(ball, frame)
             o por otro lado
             dibujar_elemento(actores, frame)'''
 
+        return tracks_by_frame
+    
 
-        return tracked_batch
+    def draw_tracks(self, frames, tracks_by_frame):
+
+
+        pass
+
 
     def detect_n_track(self, frames):
         
         detections = []
+
         for i in range(0, len(frames), 25):
             #hilo 1
             frame_batch = frames[i:i+25]
@@ -89,9 +100,10 @@ class Tracker:
             detections = self.detect_frames(frame_batch)
            
             #hilo 2
-            tracked_batch = self.update_detections(detections)
-            #print(tracked_batch)
+            tracks_by_frame = self.get_tracks(detections) # Devuelve un diccionario de 0 a 24 q contiene otros diccionarios diccionarios q son player, referee, goalkeeper, ball
+            output_frames = self.draw_tracks(frame_batch,tracks_by_frame)
 
-                            
-        return detections[0]
+            break
+     
+        return output_frames
         
