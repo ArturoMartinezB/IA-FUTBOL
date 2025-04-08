@@ -1,11 +1,12 @@
 import cv2
+import numpy as np
 
 def draw_ellipse(frame, color, bbox):
     
     x1, _, x2, y2 = bbox
     center = (int((x1 + x2) / 2), y2)
 
-    ellipse = cv2.ellipse(
+    cv2.ellipse(
                 frame, 
                 center, 
                 axes = (int(bbox[2] / 2), int(bbox[3] / 2)),
@@ -16,7 +17,8 @@ def draw_ellipse(frame, color, bbox):
                 thickness=2,
                 lineType=cv2.LINE_AA
             )
-    return ellipse
+    
+    return frame
 
 
 def draw_banner(frame, color, bbox, track_id):
@@ -54,3 +56,22 @@ def draw_banner(frame, color, bbox, track_id):
 
     return frame
 
+
+def draw_ball_pointer(frame, bbox, track_id,color = (0, 255, 255), size = 15):
+
+    x1, y1, x2, y2 = bbox 
+    # Calcula el centro del bounding box
+    center_x = int((x1 + x2) / 2)
+    center_y = int((y1 + y2) / 2)
+
+    # Define los tres vértices del triángulo (apunta hacia arriba)
+    pt1 = (center_x, center_y - size)
+    pt2 = (center_x - size, center_y + size)
+    pt3 = (center_x + size, center_y + size)
+
+    triangle_cnt = np.array([pt1, pt2, pt3])
+
+    # Dibuja el contorno del triángulo
+    cv2.drawContours(frame, [triangle_cnt], 0, color, 2)
+    
+    return frame
