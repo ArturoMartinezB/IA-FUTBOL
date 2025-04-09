@@ -10,4 +10,10 @@ class Match:
         self.possession_percentage = (100,0)
         self.possessor = team_1
     
+    def set_team_1(self, team):
 
+        self.team_1 = team
+
+    def set_team_2(self, team):
+
+        self.team_2 = team

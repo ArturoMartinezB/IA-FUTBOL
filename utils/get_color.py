@@ -31,4 +31,21 @@ def get_color_player(image):
 
 def get_teams_colors(players_colors):
     
-    pass
+    # Paso 1: Obtener los colores como lista de arrays
+    track_ids = list(players_colors.keys())
+    colors = np.array(list(players_colors.values()))
+
+    # Paso 2: Aplicar KMeans con 2 clusters
+    kmeans = KMeans(n_clusters=2, init='k-means++', n_init=10)
+    kmeans.fit(colors)
+
+    # Paso 3: Obtener las etiquetas de cada color (a qué clúster pertenece)
+    labels = kmeans.labels_  # Mismo orden que `track_ids`
+
+    # Paso 4: Asociar cada track_id a su equipo (clúster)
+    track_id_to_team = {track_id: int(label) for track_id, label in zip(track_ids, labels)}
+
+    # Paso 5: Obtener el color medio de cada equipo (centroide del clúster)
+    team_colors = kmeans.cluster_centers_  # shape: (2, 3)
+
+    return (team_colors,track_id_to_team)

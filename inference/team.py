@@ -16,5 +16,12 @@ class Team:
         return self.color
     
     def add_player(self, player):
+
+
+        #De momento player = track_id
         self.players.append(player)
+
+    def belongs_here(self, player):
+
+        return player in self.players
 
