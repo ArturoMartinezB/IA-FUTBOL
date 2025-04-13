@@ -1,27 +1,29 @@
-
+from exceptions.custom_exceptions import TeamFullException
 
 class Team:
 
-    def __init__(self, name, color):
+    def __init__(self, name):
 
         self.name = name
-        self.color = color 
-        self.players = []
+        self.color = None 
+        self.players = {number: None for number in range(2, 12)}
         self.goalkeeper = None
 
     def assign_team_color(self, color):
         self.color = color
     
-    def get_team_color(self):
-        return self.color
-    
-    def add_player(self, player):
+    def add_player(self, track_id):
 
+        for dorsal in range(2,11):
+            if self.players[dorsal] == None:
+                self.players[dorsal] = track_id
+                return True
 
-        #De momento player = track_id
-        self.players.append(player)
+        #Si llega a este punto, no hay dorsales libres --> El jugador que se intenta añadir ya ha aparecido con anterioridad    
+        return False
+        
 
     def belongs_here(self, player):
 
-        return player in self.players
+        return player in self.players.values()
 

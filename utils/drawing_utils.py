@@ -3,13 +3,15 @@ import numpy as np
 
 def draw_ellipse(frame, color, bbox):
     
-    x1, _, x2, y2 = bbox
-    center = (int((x1 + x2) / 2), y2)
+    x1, y1, x2, y2 = bbox
+    center = (int((x1 + x2) / 2), int(y2))
+
+    axes = (int( x2-x1), int((y2-y1)/4))
 
     cv2.ellipse(
                 frame, 
                 center, 
-                axes = (int(bbox[2] / 2), int(bbox[3] / 2)),
+                axes,
                 angle=0,
                 startAngle = -40, 
                 endAngle=240, 
@@ -27,7 +29,7 @@ def draw_banner(frame, color, bbox, track_id):
     center = (int((x1+x2)/2), int(y2))
 
     rectangle_width = 40
-    rectangle_height=20
+    rectangle_height= 20
     x1_rect = center[0] - rectangle_width//2
     x2_rect = center[0] + rectangle_width//2
     y1_rect = (y2- rectangle_height//2) +15
@@ -57,7 +59,7 @@ def draw_banner(frame, color, bbox, track_id):
     return frame
 
 
-def draw_ball_pointer(frame, bbox, track_id,color = (0, 255, 255), size = 15):
+def draw_ball_pointer(frame, bbox,color = (0, 255, 255), size = 15):
 
     x1, y1, x2, y2 = bbox 
     # Calcula el centro del bounding box

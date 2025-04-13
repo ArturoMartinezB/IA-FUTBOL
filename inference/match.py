@@ -1,4 +1,4 @@
-from team import Team
+from inference.team import Team
 
 class Match: 
 

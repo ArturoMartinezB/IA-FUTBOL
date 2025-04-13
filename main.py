@@ -10,16 +10,14 @@ print("Inicio del programa")
 def main():
 
     #Introducir datos de los equipos para definir el partido
-    print("Introduzca los datos del equipo 1")
+    '''print("Introduzca los datos del equipo 1")
     team_name_1 = input("Nombre: ")
-    team_color_1 = input("Color: ")
 
     print("Introduzca los datos del equipo 2")
-    team_name_2 = input("Nombre: ")
-    team_color_2 = input("Color: ")
+    team_name_2 = input("Nombre: ")'''
 
-    team_1= Team(team_name_1,team_color_1)
-    team_2 = Team(team_name_2,team_color_2)
+    team_1= Team('Bayern')
+    team_2 = Team('Wolfsburg')
 
     match = Match(team_1,team_2)
 
