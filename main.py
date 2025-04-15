@@ -32,7 +32,7 @@ def main():
     tracked_frames = tracker.detect_n_track(frames)
 
     #Rearmar video
-    write_video(tracked_frames, "data/video_test/prueba3_tracked.mp4")
+    write_video(tracked_frames, "data/video_test/prueba3_tracked_dorsal.mp4")
     print("Video guardado")
 
     
