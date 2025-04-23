@@ -1,6 +1,7 @@
 import math
 import supervision as sv
 import numpy as np
+from itertools import combinations
 from utils import color_utils, drawing_utils
 from inference.team import Team
 
@@ -149,9 +150,9 @@ class Tracker:
         # Unir los valores de ambos diccionarios
         classified_players1 = set(self.match.team_1.players.values()) 
         classified_players2 = set(self.match.team_2.players.values())
-        print("CLASSIFIED PLAYERS:")
+        '''print("CLASSIFIED PLAYERS:")
         print("Team_1 : ", set(self.match.team_1.players.values()))
-        print("Team_2 : ", set(self.match.team_2.players.values()))
+        print("Team_2 : ", set(self.match.team_2.players.values()))'''
 
         for frame_number , _ in enumerate(track_by_frame):
             # Extraer la lista de jugadores del frame actual
@@ -175,13 +176,14 @@ class Tracker:
             #print ( "NUEVOS JUGADORES: ", new_players)
         return new_players
 
-
     def euclidean_distance(self,bbox1, bbox2):
         x1, y1 = drawing_utils.get_center(bbox1)
         x2, y2 = drawing_utils.get_center(bbox2)
         return math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
-    
 
+    def color_distance(self, c1, c2):
+        return np.linalg.norm(np.array(c1) - np.array(c2))
+    
     def nearest_bbox(self, bbox, players):
 
         nearest_track_id = None
@@ -196,10 +198,7 @@ class Tracker:
         
         return (nearest_track_id)
 
-
-    def recover_track_id(self, frame_number, player_id, bbox, track_by_frame, team_id):
-        
-        recovered = False
+    def get_lost_ids(self,team_id, frame_number, track_by_frame):
 
         if team_id == 1:
             team = self.match.team_1
@@ -218,33 +217,52 @@ class Tracker:
 
         # Obtener los track_id asignados a un equipo pero que no aparecen en el campo ( han desaparecido y probablemente se les ha asignado el id que queremos recuperar)
         team_ids = set(team.players.values()) 
-        print(f"Team_ids in frame:", team_ids_in_frame)
+        #print(f"Team_ids in frame:", team_ids_in_frame)
         lost_ids = team_ids - team_ids_in_frame
-        print(f"Lost_ids frame[{frame_number}]: ",lost_ids)
+        #print(f"Lost_ids frame[{frame_number}]: ",lost_ids)
+
+        return lost_ids
+
+    def get_key(self, dicc, value):
+
+        key = [k for k, v in dicc.items() if v == value ]
+        
+        return  key[0]
+
+    def recover_track_id(self, frame_number, player_id, bbox, track_by_frame, team_id):
+        
+        recovered = False
+
+        if team_id == 1:
+            team = self.match.team_1
+
+        else: 
+            team = self.match.team_2
+
+        lost_ids = self.get_lost_ids(team_id,frame_number,track_by_frame)
 
         #ajustar formato
         player_id = int(player_id)
+        players = team.players
 
         if len(lost_ids) == 1:
-            key = [k for k, value in team.players.items() if value == next(iter(lost_ids))]
-            key = key[0]
+
+            key = self.get_key(players, next(iter(lost_ids)))
 
             recovered = True
+
             if team_id == 1:
                 self.match.team_1.players[key] = player_id
-                print(f"JUGADOR {player_id} añadido al equipo 1, con el dorsal {key}")
+                #print(f"JUGADOR {player_id} añadido al equipo 1, con el dorsal {key}")
             else:
                 self.match.team_2.players[key] = player_id
-                print(f"JUGADOR {player_id} añadido al equipo 2, con el dorsal {key}")
+                #print(f"JUGADOR {player_id} añadido al equipo 2, con el dorsal {key}")
 
         elif len(lost_ids) > 1:
             #obtener el que tenga mínima distancia entre los track_id desaparecidos y la última posición detectada
             if frame_number != 0:
                 lost_players_with_bbox = []
-                
-                print("Lista de últimas posiciones: ", team.last_position)
-                #Ahora tengo que calcular las distancias entre el player_id, bbox de los argumentos y los bboxes de los track_id lost, que los tengo en algún frame de track_by_frame 
-                #(o no, en ese caso debería guardar en el diccionario player el último bbox detectado de cada jugador o algo similar)
+
                 for i in range(1, frame_number):
 
                     for player in track_by_frame[frame_number-i]['players']:
@@ -252,41 +270,36 @@ class Tracker:
                         for lost in lost_ids:
 
                             if player[0] == lost:
-
                                 lost_players_with_bbox.append(player)
                 
                 if lost_players_with_bbox == []:
 
                     for lost in lost_ids:
                         lost_players_with_bbox.append((lost, team.last_position[lost]))  # FALTA UN CASO POR CUBRIR que un track_id si que esté en este batch y el otro no 
-                                                                                #(dudo sobre la veracidad del último bbox)
+                                                                                            #(dudo sobre la veracidad del último bbox)
                 nearest_track_id = self.nearest_bbox(bbox,lost_players_with_bbox)
 
-                key = [k for k, value in team.players.items() if value == nearest_track_id]
-                key = key[0]
-
+                key = self.get_key(players, nearest_track_id)
                 
             else: 
-
                 nearest_track_id = team.last_position[lost]
-                key = [k for k, value in team.players.items() if value == nearest_track_id]
-                key = key[0]  
+                key = self.get_key(players, nearest_track_id)
 
             recovered = True
+
             if team_id == 1:
                 self.match.team_1.players[key] = player_id
-                print(f"JUGADOR {player_id} añadido al equipo 1, con el dorsal {key}")
+                #print(f"JUGADOR {player_id} añadido al equipo 1, con el dorsal {key}")
             else:
                 self.match.team_2.players[key] = player_id
-                print(f"JUGADOR {player_id} añadido al equipo 2, con el dorsal {key}")
-                
+                #print(f"JUGADOR {player_id} añadido al equipo 2, con el dorsal {key}")  
+
         else: 
-            print("Error de detección, falso positivo, track_id no incorporado: ", player_id)
+            #print("Error de detección, falso positivo, track_id no incorporado: ", player_id)
+            pass
 
         return recovered
         
-
-
     def assign_new_players(self, new_players, frames, tracks_by_frame):
 
         added = []
@@ -323,7 +336,6 @@ class Tracker:
                             if self.recover_track_id(num, track_id, bbox, tracks_by_frame, 2):
                                 added.append(track_id)
                 
-
     def initial_positions(self,tracks_by_frame):
 
         for i in range(0,24):
@@ -335,7 +347,6 @@ class Tracker:
 
                 elif track_id in set(self.match.team_2.players.values()):
                     self.match.team_2.update_last_position(track_id,bbox)
-
 
     def draw_tracks(self, frames, tracks_by_frame):
 
@@ -386,6 +397,125 @@ class Tracker:
 
                 drawing_utils.draw_ball_pointer(frame, bbox)
                 
+    def check_collision(self, frames, tracks_by_frame):
+
+        collided_track_ids = []
+
+        for frame_num in range(len(frames)):
+            players = tracks_by_frame[frame_num]['players']
+            for (track_id1, bbox1), (track_id2, bbox2) in combinations(players, 2):
+                 # Evitar comparar jugadores del mismo equipo
+                team1 = self.match.belongs_to(track_id1)
+                team2 = self.match.belongs_to(track_id2)
+
+                if team1 is not None and team2 is not None and team1 == team2:
+                    continue  # están en el mismo equipo, no se comparan
+
+                if self.euclidean_distance(bbox1, bbox2) < 25:
+                    
+                    if (track_id1, track_id2) not in collided_track_ids and (track_id2, track_id1) not in collided_track_ids:
+                        print(f"Possible collision between {track_id1} and {track_id2} in frame {frame_num}")
+                        collided_track_ids.append((track_id1, track_id2))
+
+
+        return collided_track_ids
+    
+    def check_changed_team(self, collided_track_ids, colors_per_id): 
+
+        if collided_track_ids:
+
+            wrong1 = False
+            wrong2 = False
+
+            for track_id1, track_id2 in collided_track_ids:
+
+                team_assigned_1 = self.match.belongs_to(track_id1)  
+                team_assigned_2 = self.match.belongs_to(track_id2)
+
+                distance_1_1 = self.color_distance(colors_per_id[track_id1], self.match.team_1.color)
+                distance_1_2 = self.color_distance(colors_per_id[track_id1], self.match.team_2.color)
+
+                
+                distance_2_1 = self.color_distance(colors_per_id[track_id2], self.match.team_1.color)
+                distance_2_2 = self.color_distance(colors_per_id[track_id2], self.match.team_2.color)
+
+                if distance_1_1 < distance_1_2 and team_assigned_1 == 2: 
+                    wrong1 = True
+
+                elif distance_1_1 > distance_1_2 and team_assigned_1 == 1: 
+                    wrong1 = True
+                
+                if distance_2_1 < distance_2_2 and team_assigned_2 == 2: 
+                    wrong2 = True
+
+                elif distance_2_1 > distance_2_2 and team_assigned_2 ==1: 
+                    wrong2 = True
+
+
+                if wrong1 and wrong2:
+                    # Intercambio total entre jugadores (Caso 1)
+                    self.swap_players(track_id1, track_id2)
+
+                elif wrong1 and not wrong2:
+                    # track_id1 ha cambiado de equipo incorrectamente (Caso 2)
+                    self.reassign_player(track_id1,track_id2)
+                
+                elif wrong2 and not wrong1:
+                    # track_id2 ha cambiado de equipo incorrectamente (Caso 2)
+                    self.reassign_player(track_id2, track_id1)
+                else: 
+                    print("nothing wrong")
+
+    def reassign_player(self, wrong_team_id, wrong_dorsal_id):
+
+        team_1 = self.match.belongs_to(wrong_team_id)  
+        team_2 = self.match.belongs_to(wrong_dorsal_id)
+
+        if team_1 != team_2:
+            print("COLISIÓN CON CAMBIO PARCIAL: NO SON IGUALES")
+
+        else:
+            if team_1 == 1: 
+                wrong_team_key = self.get_key(self.match.team_1.players, wrong_team_id)
+                wrong_dorsal_key = self.get_key(self.match.team_1.players, wrong_dorsal_id)
+
+                self.match.team_1.players[wrong_dorsal_key] = None
+                self.match.team_1.players[wrong_team_key] = wrong_dorsal_id
+
+                print("CAMBIO TRAS CHOQUE EN EL EQUIPO 1")
+            
+            elif team_1 == 2: 
+
+                wrong_team_key = self.get_key(self.match.team_2.players, wrong_team_id)
+                wrong_dorsal_key = self.get_key(self.match.team_2.players, wrong_dorsal_id)
+
+                self.match.team_2.players[wrong_dorsal_key] = None
+                self.match.team_2.players[wrong_team_key] = wrong_dorsal_id
+                
+                print("CAMBIO TRAS CHOQUE EN EL EQUIPO 2")
+
+            else: 
+                print ("ERROR EN EL CAMBIO DE EQUIPO CON COLISIÓN")
+
+    def swap_players(self,player_a, player_b):
+        
+        if self.match.team_1.belongs_here(player_a):
+            key = self.get_key(self.match.team_1.players, player_a)
+            self.match.team_1.players[key] = player_b
+
+            key = self.get_key(self.match.team_2.players, player_b)
+            self.match.team_2.players[key] = player_a
+
+            print("SWAP DE JUGADORES")
+        else:
+
+            key = self.get_key(self.match.team_1.players, player_b)
+            self.match.team_1.players[key] = player_a
+
+            key = self.get_key(self.match.team_2.players, player_a)
+            self.match.team_2.players[key] = player_b
+
+            print("SWAP DE JUGADORES")
 
     def detect_n_track(self, frames):
         
@@ -396,7 +526,7 @@ class Tracker:
         for i in range(0, len(frames), 25):
             #hilo 1
             frame_batch = frames[i:i+25]
-            print(f"Procesando batch {(i//25)+1} / 30 con {len(frame_batch)} frames")
+            print(f"Procesando batch {(i//25)} / 30 con {len(frame_batch)} frames")
             detections = self.detect_frames(frame_batch)
            
             #hilo 2
@@ -412,15 +542,19 @@ class Tracker:
                 initial = False
 
             else:
-
-                # check_colors --> casos de intercambio por choques entre jugadores de distintos equipos
                 
                 if (new_players := self.check_new_players(tracks_by_frame)):
 
-                    #print(detections)
                     self.assign_new_players(new_players, frame_batch, tracks_by_frame)
 
+                if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
 
+                    self.check_changed_team(collided_players,self.get_players_colors(frame_batch,tracks_by_frame))
+
+            #hilo 3 (podemos meter aquí las colisiones también, que realentizan un poco)
+            
+            
+            
             self.draw_tracks(frame_batch,tracks_by_frame)
             
             output_frames = output_frames + frame_batch
