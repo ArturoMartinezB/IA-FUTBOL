@@ -87,3 +87,43 @@ def get_teams_colors(players_colors):
     team_colors = kmeans.cluster_centers_  # shape: (2, 3)
 
     return (team_colors,track_id_to_team)
+
+def get_players_colors(frames, tracks_by_frame):
+    
+    players_colors = {}
+
+    for num, frame in enumerate(frames):
+        
+        for tuple in tracks_by_frame[num]['players']:
+            track_id = int(tuple[0])
+        
+            bbox = tuple[1]
+            x1, y1, x2, y2 = map(int, bbox)
+
+            # Recorta el área del bounding box
+            cropped_bbox = frame[y1:y2, x1:x2]
+
+            # Obtiene el color y lo añade a la lista del track_id
+            color = get_color_player(cropped_bbox)
+
+            #Guardo los colores por track_id obtenidos de distintos frames
+            
+            if track_id in players_colors:
+                actual_colors_list = players_colors[track_id]
+            else:
+                actual_colors_list = []
+
+            updated_list = [color] + actual_colors_list
+            players_colors[track_id] = updated_list
+        
+
+    avg_colors = {}
+
+    for track_id, color_list in players_colors.items():
+        avg_color = np.mean(color_list, axis=0)
+        avg_colors[track_id] = avg_color.astype(int).tolist()
+        
+    return avg_colors        #para que cuadre --> antes era players_colors[track_id]= color
+
+def color_distance(c1, c2):
+    return np.linalg.norm(np.array(c1) - np.array(c2))

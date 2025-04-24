@@ -1,10 +1,6 @@
 import cv2
 import numpy as np
 
-def get_center(bbox):
-    x1, y1, x2, y2 = bbox
-    return (int((x1 + x2) / 2), int((y1 + y2) / 2))
-
 def draw_ellipse(frame, color, bbox):
     
     x1, y1, x2, y2 = bbox
@@ -25,7 +21,6 @@ def draw_ellipse(frame, color, bbox):
             )
     
     return frame
-
 
 def draw_banner(frame, color, bbox, track_id):
     
@@ -61,7 +56,6 @@ def draw_banner(frame, color, bbox, track_id):
         )
 
     return frame
-
 
 def draw_ball_pointer(frame, bbox,color = (0, 255, 255), size = 15):
 

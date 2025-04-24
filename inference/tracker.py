@@ -1,9 +1,8 @@
-import math
 import supervision as sv
 import numpy as np
 from itertools import combinations
-from utils import color_utils, drawing_utils
-from inference.team import Team
+from utils import color_utils, drawing_utils, bbox_utils
+from inference.ball_interpolator import BallInterpolator
 
 class Tracker:
 
@@ -11,9 +10,9 @@ class Tracker:
         self.model = model
         self.tracker = sv.ByteTrack()
         self.match = match
-        self.clases = {'ball': 0, 'goalkeeper': 1, 'player': 2, 'referee': 3}
+        self.ball_interpolator = BallInterpolator()
+        self.clases = {'ball': 0, 'goalkeeper': 1, 'player': 2, 'referees': 3}
         self.track_order = {'bbox': 0, 'mask': 1, 'confidence': 2, 'class_id': 3, 'track_id': 4, 'class_name': 5} # orden de los elementos en el array de detecciones
-
 
     def detect_frames(self,frames):
 
@@ -47,11 +46,12 @@ class Tracker:
             
             # frame recién trackeado
             tracked_frame = tracked_batch[-1]  
-            
+
             #Recorremos todos los objetos trackeados y según la clase se guarda (track_id, bbox) en la lista correspondiente
             #Después las listas se añaden a un diccionario con key = nº frame (0-24)
-            for tracks in tracked_frame:
-                
+            for cont, tracks in enumerate(tracked_frame):
+
+                #print("TRACK-",cont)
                 class_id = self.track_order['class_id']
                 track_id = self.track_order['track_id']
                 bbox = self.track_order['bbox']
@@ -59,15 +59,28 @@ class Tracker:
                 if tracks[class_id] == self.clases['player']:
                     players.append((tracks[track_id], tracks[bbox]))
 
-                elif tracks[class_id] == self.clases['referee']:
+                elif tracks[class_id] == self.clases['referees']:
+                    
                     referees.append((tracks[track_id], tracks[bbox]))
 
-                elif tracks[class_id] == self.clases['goalkeeper']:  
+                elif tracks[class_id] == self.clases['goalkeeper']:
+                
                     goalkeepers.append((tracks[track_id], tracks[bbox]))
 
-                else:
-                    ball.append((tracks[track_id], tracks[bbox]))
+                elif tracks[class_id] == self.clases['ball']:   
+                    pass
             
+            #AL TENER UN SCORE BAJO LA DETECCIÓN DEL BALÓN, EL TRACKER LO ESTÁ IGNORANDO
+            # AÑADIRLO MANUALMENTE A TRACKS_BY_FRAME DESDE DETS
+
+            for i, obj in enumerate(dets):
+                bbox = obj[0].tolist()  
+                class_id = int(obj[3])  
+
+                if class_id == self.clases['ball']:
+
+                    ball.append(("O", bbox))
+
             tracks_by_frame[frame] = {
                 'players':players, 
                 'referees':referees,
@@ -76,44 +89,7 @@ class Tracker:
             }
 
         return tracks_by_frame
-    
-    def get_players_colors(self, frames, tracks_by_frame):
-        
-        players_colors = {}
-
-        for num, frame in enumerate(frames):
-            
-            for tuple in tracks_by_frame[num]['players']:
-                track_id = int(tuple[0])
-            
-                bbox = tuple[1]
-                x1, y1, x2, y2 = map(int, bbox)
-
-                # Recorta el área del bounding box
-                cropped_bbox = frame[y1:y2, x1:x2]
-
-                # Obtiene el color y lo añade a la lista del track_id
-                color = color_utils.get_color_player(cropped_bbox)
-
-                #Guardo los colores por track_id obtenidos de distintos frames
-                
-                if track_id in players_colors:
-                    actual_colors_list = players_colors[track_id]
-                else:
-                    actual_colors_list = []
-
-                updated_list = [color] + actual_colors_list
-                players_colors[track_id] = updated_list
-            
-
-        avg_colors = {}
-
-        for track_id, color_list in players_colors.items():
-            avg_color = np.mean(color_list, axis=0)
-            avg_colors[track_id] = avg_color.astype(int).tolist()
-            
-        return avg_colors        #para que cuadre --> antes era players_colors[track_id]= color
-
+   
     def assign_teams(self,players_colors):
 
         if players_colors is None:
@@ -139,20 +115,18 @@ class Tracker:
 
     def assign_referees(self, tracks_by_frame):
 
-        for frame_num in tracks_by_frame:
-            for referee in tracks_by_frame[frame_num]['referees']:
-                self.match.add_referee(referee[0])             
+        for frame_num, _ in enumerate(tracks_by_frame):
+            if tracks_by_frame[frame_num]['referees']:
+                for referee in tracks_by_frame[frame_num]['referees']:
+                    self.match.add_referee(referee[0])             
                         
-    def check_new_players(self, track_by_frame):###### ATENCIÓN--> CUANDO HAYA NUEVOS JUGADORES--> COMPROBAR COLORES DE LOS JUGADORES POR POSIBLE CONFUSIÓN
+    def check_new_players(self, track_by_frame):
 
         new_players = {}
 
         # Unir los valores de ambos diccionarios
         classified_players1 = set(self.match.team_1.players.values()) 
         classified_players2 = set(self.match.team_2.players.values())
-        '''print("CLASSIFIED PLAYERS:")
-        print("Team_1 : ", set(self.match.team_1.players.values()))
-        print("Team_2 : ", set(self.match.team_2.players.values()))'''
 
         for frame_number , _ in enumerate(track_by_frame):
             # Extraer la lista de jugadores del frame actual
@@ -175,28 +149,6 @@ class Tracker:
             
             #print ( "NUEVOS JUGADORES: ", new_players)
         return new_players
-
-    def euclidean_distance(self,bbox1, bbox2):
-        x1, y1 = drawing_utils.get_center(bbox1)
-        x2, y2 = drawing_utils.get_center(bbox2)
-        return math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
-
-    def color_distance(self, c1, c2):
-        return np.linalg.norm(np.array(c1) - np.array(c2))
-    
-    def nearest_bbox(self, bbox, players):
-
-        nearest_track_id = None
-        distance = 100000
-
-        for track_id, bbox_it in players:
-            
-            distance_it = self.euclidean_distance(bbox, bbox_it)
-            if distance > distance_it:
-                distance = distance_it
-                nearest_track_id = track_id
-        
-        return (nearest_track_id)
 
     def get_lost_ids(self,team_id, frame_number, track_by_frame):
 
@@ -277,7 +229,7 @@ class Tracker:
                     for lost in lost_ids:
                         lost_players_with_bbox.append((lost, team.last_position[lost]))  # FALTA UN CASO POR CUBRIR que un track_id si que esté en este batch y el otro no 
                                                                                             #(dudo sobre la veracidad del último bbox)
-                nearest_track_id = self.nearest_bbox(bbox,lost_players_with_bbox)
+                nearest_track_id = bbox_utils.nearest_bbox(bbox,lost_players_with_bbox)
 
                 key = self.get_key(players, nearest_track_id)
                 
@@ -411,7 +363,7 @@ class Tracker:
                 if team1 is not None and team2 is not None and team1 == team2:
                     continue  # están en el mismo equipo, no se comparan
 
-                if self.euclidean_distance(bbox1, bbox2) < 25:
+                if bbox_utils.euclidean_distance(bbox1, bbox2) < 25:
                     
                     if (track_id1, track_id2) not in collided_track_ids and (track_id2, track_id1) not in collided_track_ids:
                         print(f"Possible collision between {track_id1} and {track_id2} in frame {frame_num}")
@@ -432,12 +384,12 @@ class Tracker:
                 team_assigned_1 = self.match.belongs_to(track_id1)  
                 team_assigned_2 = self.match.belongs_to(track_id2)
 
-                distance_1_1 = self.color_distance(colors_per_id[track_id1], self.match.team_1.color)
-                distance_1_2 = self.color_distance(colors_per_id[track_id1], self.match.team_2.color)
+                distance_1_1 = color_utils.color_distance(colors_per_id[track_id1], self.match.team_1.color)
+                distance_1_2 = color_utils.color_distance(colors_per_id[track_id1], self.match.team_2.color)
 
                 
-                distance_2_1 = self.color_distance(colors_per_id[track_id2], self.match.team_1.color)
-                distance_2_2 = self.color_distance(colors_per_id[track_id2], self.match.team_2.color)
+                distance_2_1 = color_utils.color_distance(colors_per_id[track_id2], self.match.team_1.color)
+                distance_2_2 = color_utils.color_distance(colors_per_id[track_id2], self.match.team_2.color)
 
                 if distance_1_1 < distance_1_2 and team_assigned_1 == 2: 
                     wrong1 = True
@@ -528,15 +480,19 @@ class Tracker:
             frame_batch = frames[i:i+25]
             print(f"Procesando batch {(i//25)} / 30 con {len(frame_batch)} frames")
             detections = self.detect_frames(frame_batch)
-           
+
+            #print(detections)
+
             #hilo 2
             tracks_by_frame = self.get_tracks(detections) # Devuelve un diccionario de 0 a 24 q contiene otros diccionarios diccionarios q son player, referee, goalkeeper, ball
+            
+            #tracks_by_frame = self.ball_interpolator.interpolate_ball(tracks_by_frame)
             
             if initial:
 
                 self.assign_referees(tracks_by_frame)
                 
-                self.assign_teams(self.get_players_colors(frame_batch,tracks_by_frame)) # Obtengo los colores de los jugadores que aparecen en algún frame de los 25 y asigno los equipos 
+                self.assign_teams(color_utils.get_players_colors(frame_batch,tracks_by_frame)) # Obtengo los colores de los jugadores que aparecen en algún frame de los 25 y asigno los equipos 
                 
                 self.initial_positions(tracks_by_frame)
                 initial = False
@@ -549,11 +505,11 @@ class Tracker:
 
                 if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
 
-                    self.check_changed_team(collided_players,self.get_players_colors(frame_batch,tracks_by_frame))
+                    self.check_changed_team(collided_players, color_utils.get_players_colors(frame_batch,tracks_by_frame))
 
             #hilo 3 (podemos meter aquí las colisiones también, que realentizan un poco)
-            
-            
+
+            tracks_by_frame = self.ball_interpolator.interpolate_ball(tracks_by_frame)
             
             self.draw_tracks(frame_batch,tracks_by_frame)
             
