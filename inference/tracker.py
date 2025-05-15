@@ -3,6 +3,7 @@ import numpy as np
 from itertools import combinations
 from utils import color_utils, drawing_utils, bbox_utils
 from inference.ball_interpolator import BallInterpolator
+from inference.matchstats import MatchStats
 
 class Tracker:
 
@@ -17,7 +18,7 @@ class Tracker:
     def detect_frames(self,frames):
 
         #Prediciciones con el modelo entrenado
-        results = self.model.predict(frames,device="cuda")
+        results = self.model.predict(frames,device="cuda:1")
 
         ''' Se pasan los resultados a formato sv detections ||  El último array contiene el nombre de las clases de los objetos detectados'''
             
@@ -199,15 +200,24 @@ class Tracker:
 
         if len(lost_ids) == 1:
 
-            key = self.get_key(players, next(iter(lost_ids)))
+            lost_id = next(iter(lost_ids))
+
+            key = self.get_key(players, lost_id)
 
             recovered = True
 
             if team_id == 1:
                 self.match.team_1.players[key] = player_id
+
+                #añado el cambio de track_id en las stats
+                self.match.team_1.get_player_stats(key).add_track_id(player_id)
                 #print(f"JUGADOR {player_id} añadido al equipo 1, con el dorsal {key}")
             else:
                 self.match.team_2.players[key] = player_id
+
+                #añado el cambio de track_id en las stats
+                self.match.team_2.get_player_stats(key).add_track_id(player_id)
+
                 #print(f"JUGADOR {player_id} añadido al equipo 2, con el dorsal {key}")
 
         elif len(lost_ids) > 1:
@@ -366,7 +376,7 @@ class Tracker:
                 if bbox_utils.euclidean_distance(bbox1, bbox2) < 25:
                     
                     if (track_id1, track_id2) not in collided_track_ids and (track_id2, track_id1) not in collided_track_ids:
-                        print(f"Possible collision between {track_id1} and {track_id2} in frame {frame_num}")
+                        #print(f"Possible collision between {track_id1} and {track_id2} in frame {frame_num}")
                         collided_track_ids.append((track_id1, track_id2))
 
 
@@ -416,7 +426,8 @@ class Tracker:
                     # track_id2 ha cambiado de equipo incorrectamente (Caso 2)
                     self.reassign_player(track_id2, track_id1)
                 else: 
-                    print("nothing wrong")
+                    #print("nothing wrong")
+                    pass
 
     def reassign_player(self, wrong_team_id, wrong_dorsal_id):
 
@@ -424,7 +435,8 @@ class Tracker:
         team_2 = self.match.belongs_to(wrong_dorsal_id)
 
         if team_1 != team_2:
-            print("COLISIÓN CON CAMBIO PARCIAL: NO SON IGUALES")
+            #print("COLISIÓN CON CAMBIO PARCIAL: NO SON IGUALES")
+            pass
 
         else:
             if team_1 == 1: 
@@ -434,7 +446,9 @@ class Tracker:
                 self.match.team_1.players[wrong_dorsal_key] = None
                 self.match.team_1.players[wrong_team_key] = wrong_dorsal_id
 
-                print("CAMBIO TRAS CHOQUE EN EL EQUIPO 1")
+                self.match.team_1.get_player_stats_with_id(wrong_dorsal_id).add_track_id(wrong_team_id)
+
+                #print("CAMBIO TRAS CHOQUE EN EL EQUIPO 1")
             
             elif team_1 == 2: 
 
@@ -443,31 +457,38 @@ class Tracker:
 
                 self.match.team_2.players[wrong_dorsal_key] = None
                 self.match.team_2.players[wrong_team_key] = wrong_dorsal_id
+
+                self.match.team_2.get_player_stats_with_id(wrong_dorsal_id).add_track_id(wrong_team_id)
                 
-                print("CAMBIO TRAS CHOQUE EN EL EQUIPO 2")
+                #print("CAMBIO TRAS CHOQUE EN EL EQUIPO 2")
 
             else: 
-                print ("ERROR EN EL CAMBIO DE EQUIPO CON COLISIÓN")
+                #print ("ERROR EN EL CAMBIO DE EQUIPO CON COLISIÓN")
+                pass
 
     def swap_players(self,player_a, player_b):
         
         if self.match.team_1.belongs_here(player_a):
             key = self.get_key(self.match.team_1.players, player_a)
             self.match.team_1.players[key] = player_b
+            self.match.team_1.get_player_stats_with_id(player_a).add_track_id(player_b)
 
             key = self.get_key(self.match.team_2.players, player_b)
             self.match.team_2.players[key] = player_a
+            self.match.team_2.get_player_stats_with_id(player_b).add_track_id(player_a)
 
-            print("SWAP DE JUGADORES")
+            #print("SWAP DE JUGADORES")
         else:
 
             key = self.get_key(self.match.team_1.players, player_b)
             self.match.team_1.players[key] = player_a
+            self.match.team_1.get_player_stats_with_id(player_b).add_track_id(player_a)
 
             key = self.get_key(self.match.team_2.players, player_a)
             self.match.team_2.players[key] = player_b
+            self.match.team_2.get_player_stats_with_id(player_a).add_track_id(player_b)
 
-            print("SWAP DE JUGADORES")
+            #print("SWAP DE JUGADORES")
 
     def detect_n_track(self, frames):
         
@@ -481,12 +502,8 @@ class Tracker:
             print(f"Procesando batch {(i//25)} / 30 con {len(frame_batch)} frames")
             detections = self.detect_frames(frame_batch)
 
-            #print(detections)
-
             #hilo 2
-            tracks_by_frame = self.get_tracks(detections) # Devuelve un diccionario de 0 a 24 q contiene otros diccionarios diccionarios q son player, referee, goalkeeper, ball
-            
-            #tracks_by_frame = self.ball_interpolator.interpolate_ball(tracks_by_frame)
+            tracks_by_frame = self.get_tracks(detections) # Devuelve un diccionario de 0 a 24 q contiene otros diccionarios q son player, referee, goalkeeper, ball
             
             if initial:
 
@@ -512,6 +529,11 @@ class Tracker:
             tracks_by_frame = self.ball_interpolator.interpolate_ball(tracks_by_frame)
             
             self.draw_tracks(frame_batch,tracks_by_frame)
+
+            stats = MatchStats(self.match)
+            
+            stats.get_posession(tracks_by_frame)
+            #stats.update_match_possession(batch_number=i)
             
             output_frames = output_frames + frame_batch
 

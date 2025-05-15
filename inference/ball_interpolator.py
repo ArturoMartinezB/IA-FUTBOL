@@ -17,7 +17,7 @@ class BallInterpolator:
             if not tracks_by_frame[num].get('ball'):
                 
                 ball_detections.append([])
-                print("NO HAY BALÓN en frame: ", num)
+                #print("NO HAY BALÓN en frame: ", num)
                 #print(tracks_by_frame[num].get('ball'))
             else: 
 
