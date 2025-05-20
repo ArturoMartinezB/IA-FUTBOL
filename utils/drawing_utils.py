@@ -51,25 +51,22 @@ def draw_banner(frame, color, bbox, track_id):
             (int(x1_text),int(y1_rect+15)),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
-            (0,0,0),
+            (255,255,255),
             2
         )
 
     return frame
 
-def draw_ball_pointer(frame, bbox,color = (0, 255, 255), size = 15):
+def draw_pointer(frame, bbox,color = (0, 255, 255), size = 15):
 
     x1, y1, x2, y2 = bbox 
-    # Calcula el centro del bounding box
-    center_x = int((x1 + x2) / 2)
-    center_y = int((y1 + y2) / 2)
 
     # Define los tres vértices del triángulo (apunta hacia arriba)
-    pt1 = (center_x, center_y - size)
-    pt2 = (center_x - size, center_y + size)
-    pt3 = (center_x + size, center_y + size)
+    pt1 = (((x1 + x2) / 2), y1-5)
+    pt2 = (((x1 + x2) / 2 + (x2-x1)/3), (y1 - 15))
+    pt3 = (((x1 + x2) / 2 - (x2-x1)/3), (y1 - 15))
 
-    triangle_cnt = np.array([pt1, pt2, pt3])
+    triangle_cnt = np.array([pt1, pt2, pt3], dtype=np.int32)
 
     # Dibuja el contorno del triángulo
     cv2.drawContours(frame, [triangle_cnt], 0, color, 2)

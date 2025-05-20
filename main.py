@@ -10,6 +10,12 @@ print("Inicio del programa")
 
 def main():
 
+
+    #Obtener frames del video
+    frames = read_video("data/video_test/prueba3.mp4")
+
+
+
     #Introducir datos de los equipos para definir el partido
     '''print("Introduzca los datos del equipo 1")
     team_name_1 = input("Nombre: ")
@@ -17,16 +23,14 @@ def main():
     print("Introduzca los datos del equipo 2")
     team_name_2 = input("Nombre: ")
 
-    '''
+    
     #PrueBA KEYPOINTS
-    #Obtener frames del video
-    frames = read_video("data/video_test/prueba3.mp4")
+    
     model_keypoints = YOLO("models/keypoints-500ep-48b-640imgsz.pt")  # Cargar el modelo YOLOv8-pose tuneado
     #model_keypoints = YOLO("models/keypoints-80ep-16b-960imgsz.pt")
     keypointer = KeyPointer(model_keypoints)
 
     keypointer.get_keypoints(frames)
-
     '''
     team_1= Team('Bayern',1)
     team_2 = Team('Wolfsburg',2)
@@ -49,9 +53,9 @@ def main():
     match.team_2.print_players_stats()
     
     #Rearmar video
-    write_video(tracked_frames, "data/video_test/prueba3_tracked_dorsal.mp4")
+    write_video(tracked_frames, "data/video_test/prueba3_tracked_dorsalX.mp4")
     print("Video guardado")
-    '''
+    
     
 if __name__ == "__main__":
     main()

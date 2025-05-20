@@ -1,6 +1,6 @@
 import supervision as sv
 import numpy as np
-from utils import bbox_utils
+from utils import bbox_utils , drawing_utils
 
 class MatchStats:
 
@@ -36,9 +36,12 @@ class MatchStats:
 
         return possessor
 
-                
+
+
+           
     def get_posession(self, tracks_by_frame):
 
+        possessor_per_frame = []
         for num, _ in enumerate(tracks_by_frame):
             
             if tracks_by_frame[num].get('ball'):
@@ -51,7 +54,8 @@ class MatchStats:
                 
                 possessor = self.get_possessor(ball_bbox, tracks_by_frame[num]['players'])
 
-                
+                possessor_per_frame.append(possessor)
+
                 if possessor != -1 and self.last_possessor is None:
 
                     self.last_possessor = possessor
@@ -60,6 +64,12 @@ class MatchStats:
                     
                     self.change_in_possession(possessor, self.last_possessor)
 
+            else:
+                possessor_per_frame.append(None)
+
+            #print(f"Last Possessor frame: {num} = {self.last_possessor}")
+
+        return possessor_per_frame  #devuelve un array con los poseedores en cada frame, o None si no hay nadie con el balón
 
     #ESTA FUNCIÓN ES IMPORTANTE, PORQUE COMO ESTOY TRABAJANDO CON TRACK_IDS DEL TRACKS_BY_FRAME, Y COMO EL BATCH YA ESTÁ PROCESADO A NIVEL DE ASIGNACIÓN DE DORSAL = TRACK_ID
     #PUEDE QUE UN TRACK_ID QUE APARECE EN LOS PRIMEROS FRAMES, LUEGO DESAPAREZCA Y NO TENGA UN DORSAL ASIGNADO, CON LO QUE NO SE PODÍA ACCEDER A ESA PLAYER_SHEET
@@ -100,35 +110,37 @@ class MatchStats:
 
         self.check_change_of_possession(last_possessor, possessor)
         
-    def check_change_of_possession(self, player1_id, player2_id):
+    def check_change_of_possession(self, last_possessor, possessor):
         
-        if player1_id is None or player2_id is None:
+        if last_possessor is None or possessor is None:
 
             print("check_change_of_possession ha recibido un None como jugador")
             return None
 
-        if self.match.belongs_to(player1_id) == self.match.belongs_to(player2_id):
+        if self.match.belongs_to(last_possessor) == self.match.belongs_to(possessor):
 
             # HA REALIZADO UN PASE
-            self.update_pass(player1_id)
-            self.last_possessor = player2_id
+            self.update_pass(last_possessor)
+            self.last_possessor = possessor
 
-            if 1 == self.match.belongs_to(player1_id):
-                print(f"El jugador {self.match.team_1.get_dorsal(player1_id)}, se la ha pasado a {self.match.team_1.get_dorsal(player2_id)}")
+            if 1 == self.match.belongs_to(last_possessor):
+                print(f"El jugador {self.match.team_1.get_dorsal(last_possessor)}, se la ha pasado a {self.match.team_1.get_dorsal(possessor)}")
             
             else:
-                print(f"El jugador {self.match.team_2.get_dorsal(player1_id)} ha perdido el balón y lo ha interceptado {self.match.team_2.get_dorsal(player2_id)}")
+                print(f"El jugador {self.match.team_2.get_dorsal(last_possessor)}, se la ha pasado a {self.match.team_2.get_dorsal(possessor)}")
 
-        elif self.match.belongs_to(player1_id) != self.match.belongs_to(player2_id):
+        elif self.match.belongs_to(last_possessor) != self.match.belongs_to(possessor):
             
-            self.update_turn_over(player1_id)
-            self.last_possessor = player2_id
+            print("el jugador uno pertenece al equipo: ", self.match.belongs_to(last_possessor))
+            print("el jugador dos pertenece al equipo: ", self.match.belongs_to(possessor))
+            self.update_turn_over(last_possessor)
+            self.last_possessor = possessor
 
-            if 1 == self.match.belongs_to(player1_id):
-                print(f"El jugador {self.match.team_1.get_dorsal(player1_id)} ha perdido el balón y lo ha interceptado {self.match.team_2.get_dorsal(player2_id)}")
+            if 1 == self.match.belongs_to(last_possessor):
+                print(f"El jugador {self.match.team_1.get_dorsal(last_possessor)} ha perdido el balón y lo ha interceptado {self.match.team_2.get_dorsal(possessor)}")
             
             else:
-                print(f"El jugador {self.match.team_2.get_dorsal(player1_id)} ha perdido el balón y lo ha interceptado {self.match.team_1.get_dorsal(player2_id)}")
+                print(f"El jugador {self.match.team_2.get_dorsal(last_possessor)} ha perdido el balón y lo ha interceptado {self.match.team_1.get_dorsal(possessor)}")
 
         else:
             print("check_change_of_possession no entra en los casos,  almenos uno de los players no está en ningún equipo")
@@ -158,3 +170,21 @@ class MatchStats:
 
     def update_match_possession(self,batch_number):
         pass
+
+
+    def draw_possession(self, possessor_per_frame, tracks_by_frame, frames):
+
+        for num , frame in enumerate(frames):
+
+            if possessor_per_frame[num] is not None:
+
+                possessor = possessor_per_frame[num]
+
+                for track_id, bbox  in tracks_by_frame[num]['players']:
+
+
+
+
+                    if track_id == possessor:
+
+                        drawing_utils.draw_pointer(frame,bbox,(255, 0, 0), 15)

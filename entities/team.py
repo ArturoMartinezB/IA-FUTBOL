@@ -17,11 +17,13 @@ class Team:
     
     def add_player(self, track_id):
 
-        for dorsal in range(2,12):
-            if self.players[dorsal] == None:
-                self.players[dorsal] = int(track_id)
-                self.players_stats[dorsal] = Player(dorsal, int(track_id), int(self.team_id))
-                return True
+        if track_id not in list(self.players.values()):
+            for dorsal in range(2,12):
+                if self.players[dorsal] == None:
+                    self.players[dorsal] = int(track_id)
+                    self.players_stats[dorsal] = Player(dorsal, int(track_id), int(self.team_id))
+                    print(f"jugador {track_id} añadido")
+                    return True
 
         #Si llega a este punto, no hay dorsales libres --> El jugador que se intenta añadir ya ha aparecido con anterioridad en el video
         return False
@@ -47,12 +49,12 @@ class Team:
     
     def get_player_stats_with_id(self, track_id):
 
-        print("Track_id buscado: " , track_id)
+        #print("Track_id buscado: " , track_id)
         for dorsal in range(2,12):
             
             if self.players_stats[dorsal] is not None:
                 
-                print(f"Track_ids del jugador del equipo {self.team_id} son : {self.players_stats[dorsal].track_ids}")
+                #print(f"Track_ids del jugador del equipo {self.team_id} son : {self.players_stats[dorsal].track_ids}")
                 if track_id in self.players_stats[dorsal].track_ids:
                     
                     return self.players_stats[dorsal]

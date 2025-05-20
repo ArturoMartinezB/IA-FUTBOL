@@ -1,9 +1,13 @@
 import supervision as sv
 import numpy as np
+import os
 from itertools import combinations
-from utils import color_utils, drawing_utils, bbox_utils
+from utils import color_utils, drawing_utils, bbox_utils, stubs_utils
 from inference.ball_interpolator import BallInterpolator
 from inference.matchstats import MatchStats
+
+from scipy.optimize import linear_sum_assignment
+
 
 class Tracker:
 
@@ -11,6 +15,7 @@ class Tracker:
         self.model = model
         self.tracker = sv.ByteTrack()
         self.match = match
+        self.stats =MatchStats(match)
         self.ball_interpolator = BallInterpolator()
         self.clases = {'ball': 0, 'goalkeeper': 1, 'player': 2, 'referees': 3}
         self.track_order = {'bbox': 0, 'mask': 1, 'confidence': 2, 'class_id': 3, 'track_id': 4, 'class_name': 5} # orden de los elementos en el array de detecciones
@@ -198,7 +203,7 @@ class Tracker:
         player_id = int(player_id)
         players = team.players
 
-        if len(lost_ids) == 1:
+        if len(lost_ids) == 1 and  next(iter(lost_ids)) is not None:
 
             lost_id = next(iter(lost_ids))
 
@@ -222,38 +227,44 @@ class Tracker:
 
         elif len(lost_ids) > 1:
             #obtener el que tenga mínima distancia entre los track_id desaparecidos y la última posición detectada
-            if frame_number != 0:
-                lost_players_with_bbox = []
+            #if frame_number != 0:
+            lost_players_with_bbox = []
 
-                for i in range(1, frame_number):
+            for i in range(1, frame_number):
 
-                    for player in track_by_frame[frame_number-i]['players']:
-                        
-                        for lost in lost_ids:
-
-                            if player[0] == lost:
-                                lost_players_with_bbox.append(player)
-                
-                if lost_players_with_bbox == []:
-
+                for player in track_by_frame[frame_number-i]['players']:
+                    
                     for lost in lost_ids:
+
+                        if player[0] == lost:
+                            lost_players_with_bbox.append(player)
+            
+            if lost_players_with_bbox == []:
+
+                for lost in lost_ids:
+                    print("Lost _id linea 241 ", lost)
+                    if lost is not None:
                         lost_players_with_bbox.append((lost, team.last_position[lost]))  # FALTA UN CASO POR CUBRIR que un track_id si que esté en este batch y el otro no 
-                                                                                            #(dudo sobre la veracidad del último bbox)
-                nearest_track_id = bbox_utils.nearest_bbox(bbox,lost_players_with_bbox)
+                                                                                        #(dudo sobre la veracidad del último bbox)
+            nearest_track_id = bbox_utils.nearest_bbox(bbox,lost_players_with_bbox)
 
-                key = self.get_key(players, nearest_track_id)
+            key = self.get_key(players, nearest_track_id)
                 
-            else: 
-                nearest_track_id = team.last_position[lost]
+            '''else: 
+                print("EQUIPO 1:", self.match.team_1.players.values())
+                print("EQUIPO 2:", self.match.team_2.players.values())
+                print("Lost ids: ", lost_ids)
+                nearest_track_id = team.last_position[int(list(lost_ids)[0])]
+                print("Nearest track_id : ", nearest_track_id)
                 key = self.get_key(players, nearest_track_id)
-
+            '''
             recovered = True
 
             if team_id == 1:
-                self.match.team_1.players[key] = player_id
+                self.match.team_1.players[key] = int(player_id)
                 #print(f"JUGADOR {player_id} añadido al equipo 1, con el dorsal {key}")
             else:
-                self.match.team_2.players[key] = player_id
+                self.match.team_2.players[key] = int(player_id)
                 #print(f"JUGADOR {player_id} añadido al equipo 2, con el dorsal {key}")  
 
         else: 
@@ -289,14 +300,23 @@ class Tracker:
 
                     if dist1 < dist2: 
                         if self.match.team_1.add_player(track_id) == False:
+                            print("Este se intenta añadir a través de recover al team 1: ", track_id)
                             if self.recover_track_id(num, track_id, bbox, tracks_by_frame, 1):
                                 added.append(track_id)
+                                print("se añadió con recover_track_id: ", track_id)
+                                self.match.team_1.update_last_position(track_id,bbox)
+                        else:
+                            self.match.team_1.update_last_position(track_id,bbox)
                         
                             
                     else:
                         if self.match.team_2.add_player(track_id) == False:
+                            print("Este se intenta añadir a través de recover al team 2: ", track_id)
                             if self.recover_track_id(num, track_id, bbox, tracks_by_frame, 2):
                                 added.append(track_id)
+                                self.match.team_2.update_last_position(track_id,bbox)
+                        else:
+                            self.match.team_2.update_last_position(track_id,bbox)
                 
     def initial_positions(self,tracks_by_frame):
 
@@ -326,12 +346,16 @@ class Tracker:
                     color = self.match.team_1.color
                     dorsal = self.match.team_1.get_dorsal(track_id)
                 
-                else:
+                elif self.match.team_2.belongs_here(track_id):
                     color = self.match.team_2.color
                     dorsal = self.match.team_2.get_dorsal(track_id)
+                    
+                else:
+                    color = (0,125,225)
+                    dorsal = None
                 
                 drawing_utils.draw_ellipse(frame, color, bbox)
-                drawing_utils.draw_banner(frame, color, bbox, dorsal) #Esto habría que cambiarlo de sitio 
+                drawing_utils.draw_banner(frame, color, bbox, dorsal)
             
             #Formáto de color (BLUE, GREEN, RED)
             for ref in tracks['referees']:
@@ -340,6 +364,7 @@ class Tracker:
                 track_id = ref[0]
                 bbox = ref[1]
                 drawing_utils.draw_ellipse(frame,color, bbox)
+                drawing_utils.draw_banner(frame, color, bbox, track_id)
 
             for gk in tracks['goalkeepers']:
 
@@ -348,7 +373,7 @@ class Tracker:
                 track_id = gk[0]
 
                 drawing_utils.draw_ellipse(frame, color, bbox)
-                drawing_utils.draw_banner(frame,color,bbox,track_id)
+                drawing_utils.draw_banner(frame,color,bbox,dorsal)
             
             for ball in tracks['ball']:
 
@@ -357,7 +382,7 @@ class Tracker:
                 bbox = ball[1]
                 track_id = ball[0]
 
-                drawing_utils.draw_ball_pointer(frame, bbox)
+                drawing_utils.draw_pointer(frame, bbox)
                 
     def check_collision(self, frames, tracks_by_frame):
 
@@ -382,14 +407,62 @@ class Tracker:
 
         return collided_track_ids
     
+    def check_wrong_team_assignation(self, frames, tracks_by_frame):
+
+        colors_per_id = color_utils.get_players_colors(frames,tracks_by_frame)
+        wrongly_in_team1 = []
+        wrongly_in_team2 = []
+
+        for num, frame in enumerate(tracks_by_frame):
+            for track_id , bbox in tracks_by_frame[num]['players']:
+
+                    team_assigned_1 = self.match.belongs_to(track_id)  
+
+                    distance_1_1 = color_utils.color_distance(colors_per_id[track_id], self.match.team_1.color)
+                    distance_1_2 = color_utils.color_distance(colors_per_id[track_id], self.match.team_2.color)
+
+
+                    if distance_1_1 < distance_1_2 and team_assigned_1 == 2: 
+                        if not any(tid == track_id for tid, _ in wrongly_in_team1):
+                            wrongly_in_team1.append((track_id,bbox))
+
+                    elif distance_1_1 > distance_1_2 and team_assigned_1 == 1: 
+                        if not any(tid == track_id for tid, _ in wrongly_in_team2):
+                            wrongly_in_team2.append((track_id,bbox))
+
+        if len(wrongly_in_team1) > 0 or len(wrongly_in_team2) > 0:
+
+            if len(wrongly_in_team1) == len(wrongly_in_team2):
+                
+                #Para obtener la combinación de pares de jugadores que minimice las distancias entre bboxes, un erróneo de cada equipo, utilizo el Algoritmo de Asignación Húngaro
+                cost_matrix = np.zeros((len(wrongly_in_team1), len(wrongly_in_team2)))
+
+                for i, (_, bbox1) in enumerate(wrongly_in_team1):
+                    for j, (_, bbox2) in enumerate(wrongly_in_team2):
+                        cost_matrix[i, j] = bbox_utils.euclidean_distance(bbox1, bbox2)
+                                
+                row_ind, col_ind = linear_sum_assignment(cost_matrix)
+
+                matches = [(wrongly_in_team1[i], wrongly_in_team2[j]) for i, j in zip(row_ind, col_ind)]
+
+                for (track_id1, bbox1), (track_id2, bbox2) in matches:
+                    
+                    print(f"Se pretende swappear a {track_id1} con {track_id2}")
+                    self.swap_players(track_id1,track_id2)
+
+
+            else:
+
+                print(f"Hay jugadores mal asignados asimétricamente, hay {len(wrongly_in_team1)} mal asignados en el equipo 1 y {len(wrongly_in_team2)} mal asignados en el equipo 2")
+
     def check_changed_team(self, collided_track_ids, colors_per_id): 
 
         if collided_track_ids:
 
-            wrong1 = False
-            wrong2 = False
-
             for track_id1, track_id2 in collided_track_ids:
+
+                wrong1 = False
+                wrong2 = False
 
                 team_assigned_1 = self.match.belongs_to(track_id1)  
                 team_assigned_2 = self.match.belongs_to(track_id2)
@@ -435,7 +508,7 @@ class Tracker:
         team_2 = self.match.belongs_to(wrong_dorsal_id)
 
         if team_1 != team_2:
-            #print("COLISIÓN CON CAMBIO PARCIAL: NO SON IGUALES")
+            print(f"COLISIÓN CON CAMBIO PARCIAL: NO SON IGUALES {wrong_dorsal_id}, {wrong_team_id}")
             pass
 
         else:
@@ -448,13 +521,14 @@ class Tracker:
 
                 self.match.team_1.get_player_stats_with_id(wrong_dorsal_id).add_track_id(wrong_team_id)
 
-                #print("CAMBIO TRAS CHOQUE EN EL EQUIPO 1")
+                print("CAMBIO TRAS CHOQUE EN EL EQUIPO 1")
             
             elif team_1 == 2: 
 
                 wrong_team_key = self.get_key(self.match.team_2.players, wrong_team_id)
                 wrong_dorsal_key = self.get_key(self.match.team_2.players, wrong_dorsal_id)
 
+                print("cambio de dorsal", wrong_dorsal_id)
                 self.match.team_2.players[wrong_dorsal_key] = None
                 self.match.team_2.players[wrong_team_key] = wrong_dorsal_id
 
@@ -468,6 +542,7 @@ class Tracker:
 
     def swap_players(self,player_a, player_b):
         
+        print(f"Swapping players {player_a} and {player_b}")
         if self.match.team_1.belongs_here(player_a):
             key = self.get_key(self.match.team_1.players, player_a)
             self.match.team_1.players[key] = player_b
@@ -482,6 +557,7 @@ class Tracker:
 
             key = self.get_key(self.match.team_1.players, player_b)
             self.match.team_1.players[key] = player_a
+            print(f"intentando añadir al historial del equipo 1 a {player_a} donde antes estaba {player_b}")
             self.match.team_1.get_player_stats_with_id(player_b).add_track_id(player_a)
 
             key = self.get_key(self.match.team_2.players, player_a)
@@ -489,22 +565,41 @@ class Tracker:
             self.match.team_2.get_player_stats_with_id(player_a).add_track_id(player_b)
 
             #print("SWAP DE JUGADORES")
-
+   
     def detect_n_track(self, frames):
         
         detections = []
         initial = True 
         output_frames = []
+        batched_tracks = []
+        exists_stub = False
+        output_path = "stubs/prueba3.json"
+
+        if os.path.exists(output_path):
+            print(f"Archivo {output_path} ya existe. Cargando datos guardados...")
+            exists_stub = True
+            stub_tracks = stubs_utils.load_batches_from_json(output_path)
+
 
         for i in range(0, len(frames), 25):
-            #hilo 1
-            frame_batch = frames[i:i+25]
-            print(f"Procesando batch {(i//25)} / 30 con {len(frame_batch)} frames")
-            detections = self.detect_frames(frame_batch)
-
-            #hilo 2
-            tracks_by_frame = self.get_tracks(detections) # Devuelve un diccionario de 0 a 24 q contiene otros diccionarios q son player, referee, goalkeeper, ball
             
+            frame_batch = frames[i:i+25]
+
+            if exists_stub is False:
+                #hilo 1
+               
+                print(f"Procesando batch {(i//25)} / 30 con {len(frame_batch)} frames")
+                detections = self.detect_frames(frame_batch)
+
+                #hilo 2
+                tracks_by_frame = self.get_tracks(detections) # Devuelve un diccionario de 0 a 24 q contiene otros diccionarios q son player, referee, goalkeeper, ball
+                
+                batched_tracks.append(tracks_by_frame)
+            
+            else:
+                print(f"Procesando batch {(i//25)} / 30 con {len(frame_batch)} frames")
+                tracks_by_frame = stub_tracks[int(i/25)]
+
             if initial:
 
                 self.assign_referees(tracks_by_frame)
@@ -513,28 +608,34 @@ class Tracker:
                 
                 self.initial_positions(tracks_by_frame)
                 initial = False
-
+            
+            
             else:
                 
                 if (new_players := self.check_new_players(tracks_by_frame)):
 
                     self.assign_new_players(new_players, frame_batch, tracks_by_frame)
 
-                if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
-
+                '''if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
+                    
                     self.check_changed_team(collided_players, color_utils.get_players_colors(frame_batch,tracks_by_frame))
-
+                '''
+                self.check_wrong_team_assignation(frame_batch,tracks_by_frame)
             #hilo 3 (podemos meter aquí las colisiones también, que realentizan un poco)
-
+            print("EQUIPO 1:", self.match.team_1.players.values())
+            print("EQUIPO 2:", self.match.team_2.players.values())
+            
             tracks_by_frame = self.ball_interpolator.interpolate_ball(tracks_by_frame)
             
             self.draw_tracks(frame_batch,tracks_by_frame)
-
-            stats = MatchStats(self.match)
             
-            stats.get_posession(tracks_by_frame)
+            self.stats.draw_possession(self.stats.get_posession(tracks_by_frame), tracks_by_frame, frame_batch)
+            
             #stats.update_match_possession(batch_number=i)
             
             output_frames = output_frames + frame_batch
+
+        if exists_stub is False:
+            stubs_utils.save_batches_to_json(batched_tracks,output_path)
 
         return output_frames
