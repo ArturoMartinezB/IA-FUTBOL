@@ -7,8 +7,6 @@ class Match:
         self.referees = []
         self.team_1 = team_1
         self.team_2 = team_2
-        self.possession_percentage = None
-        self.team_possessor = None
 
     
     def set_team_1(self, team):

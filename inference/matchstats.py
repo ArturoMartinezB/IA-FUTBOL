@@ -8,6 +8,8 @@ class MatchStats:
 
         self.match = match
         self.last_possessor = None
+        self.possession_1_frames = 0
+        self.possession_2_frames = 0
 
     def get_possessor(self, ball_bbox, players):
 
@@ -36,10 +38,8 @@ class MatchStats:
 
         return possessor
 
-
-
            
-    def get_posession(self, tracks_by_frame):
+    def get_match_stats(self, tracks_by_frame):
 
         possessor_per_frame = []
         for num, _ in enumerate(tracks_by_frame):
@@ -55,6 +55,9 @@ class MatchStats:
                 possessor = self.get_possessor(ball_bbox, tracks_by_frame[num]['players'])
 
                 possessor_per_frame.append(possessor)
+                
+                #Actualizar posesión del partido
+                self.update_match_possession(possessor)
 
                 if possessor != -1 and self.last_possessor is None:
 
@@ -168,9 +171,22 @@ class MatchStats:
             self.match.team_2.add_turn_over(player_id)
     
 
-    def update_match_possession(self,batch_number):
-        pass
+    def update_match_possession(self,possessor):
 
+        
+        if self.match.team_1.belongs_here(possessor) is True:
+
+            self.possession_1_frames += 1
+        
+        else:
+
+            self.possession_2_frames += 1
+
+    def get_match_possession(self):
+
+        total_frames = self.possession_1_frames + self.possession_2_frames
+
+        return (float(self.possession_1_frames/total_frames), float(self.possession_2_frames/total_frames))
 
     def draw_possession(self, possessor_per_frame, tracks_by_frame, frames):
 
@@ -182,9 +198,11 @@ class MatchStats:
 
                 for track_id, bbox  in tracks_by_frame[num]['players']:
 
-
-
-
                     if track_id == possessor:
 
                         drawing_utils.draw_pointer(frame,bbox,(255, 0, 0), 15)
+
+    
+    def print_match_stats(self):
+
+        print("Possession: ",self.get_match_possession)

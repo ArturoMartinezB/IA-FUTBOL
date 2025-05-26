@@ -11,11 +11,11 @@ from scipy.optimize import linear_sum_assignment
 
 class Tracker:
 
-    def __init__(self,model,match):
+    def __init__(self, model, match, match_stats):
         self.model = model
         self.tracker = sv.ByteTrack()
         self.match = match
-        self.stats =MatchStats(match)
+        self.stats = match_stats
         self.ball_interpolator = BallInterpolator()
         self.clases = {'ball': 0, 'goalkeeper': 1, 'player': 2, 'referees': 3}
         self.track_order = {'bbox': 0, 'mask': 1, 'confidence': 2, 'class_id': 3, 'track_id': 4, 'class_name': 5} # orden de los elementos en el array de detecciones
@@ -377,8 +377,6 @@ class Tracker:
             
             for ball in tracks['ball']:
 
-                # Podría dibujar el pointer del color del equipo que tenga la posesión
-                #color = match.get_team_in_possession
                 bbox = ball[1]
                 track_id = ball[0]
 
@@ -566,76 +564,84 @@ class Tracker:
 
             #print("SWAP DE JUGADORES")
    
-    def detect_n_track(self, frames):
+    def detect_n_track(self, frame_batch, batch_number):
         
-        detections = []
-        initial = True 
+        detections = [] 
         output_frames = []
         batched_tracks = []
-        exists_stub = False
-        output_path = "stubs/prueba3.json"
+        
+        #hilo 1
+        
+        print(f"Procesando batch {(batch_number)} / 30 con {len(frame_batch)} frames")
+        detections = self.detect_frames(frame_batch)
 
-        if os.path.exists(output_path):
-            print(f"Archivo {output_path} ya existe. Cargando datos guardados...")
-            exists_stub = True
-            stub_tracks = stubs_utils.load_batches_from_json(output_path)
+        #hilo 2
+        tracks_by_frame = self.get_tracks(detections) # Devuelve un diccionario de 0 a 24 q contiene otros diccionarios q son player, referee, goalkeeper, ball
+        
+        batched_tracks.append(tracks_by_frame)
+        
 
+        if batch_number == 0:
 
-        for i in range(0, len(frames), 25):
+            self.assign_referees(tracks_by_frame)
             
-            frame_batch = frames[i:i+25]
+            self.assign_teams(color_utils.get_players_colors(frame_batch,tracks_by_frame)) # Obtengo los colores de los jugadores que aparecen en algún frame de los 25 y asigno los equipos 
+            
+            self.initial_positions(tracks_by_frame)
+        
+        
+        else:
+            
+            if (new_players := self.check_new_players(tracks_by_frame)):
 
-            if exists_stub is False:
-                #hilo 1
-               
-                print(f"Procesando batch {(i//25)} / 30 con {len(frame_batch)} frames")
-                detections = self.detect_frames(frame_batch)
+                self.assign_new_players(new_players, frame_batch, tracks_by_frame)
 
-                #hilo 2
-                tracks_by_frame = self.get_tracks(detections) # Devuelve un diccionario de 0 a 24 q contiene otros diccionarios q son player, referee, goalkeeper, ball
+
+
+            #Dos maneras de comprobar errores, con colisión o en cada batch
+            '''if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
                 
-                batched_tracks.append(tracks_by_frame)
+                self.check_changed_team(collided_players, color_utils.get_players_colors(frame_batch,tracks_by_frame))
+            '''
+            self.check_wrong_team_assignation(frame_batch,tracks_by_frame)
+
+
+        #hilo 3 (podemos meter aquí las colisiones también, que realentizan un poco)
+        
+        tracks_by_frame = self.ball_interpolator.interpolate_ball(tracks_by_frame)
+        
+           
+        return tracks_by_frame
+    
+    def read_n_track(self, stub_tracks, batch_number, frame_batch):
+
+        print(f"Leyendo batch {(batch_number)} / 30 ")
+        tracks_by_frame = stub_tracks[batch_number]
+
+        if batch_number == 0:
+
+            self.assign_referees(tracks_by_frame)
             
-            else:
-                print(f"Procesando batch {(i//25)} / 30 con {len(frame_batch)} frames")
-                tracks_by_frame = stub_tracks[int(i/25)]
+            self.assign_teams(color_utils.get_players_colors(frame_batch,tracks_by_frame)) # Obtengo los colores de los jugadores que aparecen en algún frame de los 25 y asigno los equipos 
+            
+            self.initial_positions(tracks_by_frame)
+        
+        
+        else:
+            
+            if (new_players := self.check_new_players(tracks_by_frame)):
 
-            if initial:
+                self.assign_new_players(new_players, frame_batch, tracks_by_frame)
 
-                self.assign_referees(tracks_by_frame)
+            #Dos maneras de comprobar errores, con colisión o en cada batch
+            '''if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
                 
-                self.assign_teams(color_utils.get_players_colors(frame_batch,tracks_by_frame)) # Obtengo los colores de los jugadores que aparecen en algún frame de los 25 y asigno los equipos 
-                
-                self.initial_positions(tracks_by_frame)
-                initial = False
-            
-            
-            else:
-                
-                if (new_players := self.check_new_players(tracks_by_frame)):
+                self.check_changed_team(collided_players, color_utils.get_players_colors(frame_batch,tracks_by_frame))
+            '''
+            self.check_wrong_team_assignation(frame_batch,tracks_by_frame)
 
-                    self.assign_new_players(new_players, frame_batch, tracks_by_frame)
-
-                '''if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
-                    
-                    self.check_changed_team(collided_players, color_utils.get_players_colors(frame_batch,tracks_by_frame))
-                '''
-                self.check_wrong_team_assignation(frame_batch,tracks_by_frame)
-            #hilo 3 (podemos meter aquí las colisiones también, que realentizan un poco)
-            print("EQUIPO 1:", self.match.team_1.players.values())
-            print("EQUIPO 2:", self.match.team_2.players.values())
-            
-            tracks_by_frame = self.ball_interpolator.interpolate_ball(tracks_by_frame)
-            
-            self.draw_tracks(frame_batch,tracks_by_frame)
-            
-            self.stats.draw_possession(self.stats.get_posession(tracks_by_frame), tracks_by_frame, frame_batch)
-            
-            #stats.update_match_possession(batch_number=i)
-            
-            output_frames = output_frames + frame_batch
-
-        if exists_stub is False:
-            stubs_utils.save_batches_to_json(batched_tracks,output_path)
-
-        return output_frames
+        #hilo 3 (podemos meter aquí las colisiones también, que realentizan un poco)
+        
+        tracks_by_frame = self.ball_interpolator.interpolate_ball(tracks_by_frame)
+        
+        return tracks_by_frame

@@ -2,10 +2,9 @@ from entities.player import Player
 
 class Team:
 
-    def __init__(self, name, id):
+    def __init__(self, id):
 
         self.team_id = id
-        self.name = name
         self.color = None 
         self.players = {number: None for number in range(2, 12)}
         self.players_stats = {number: None for number in range(2, 12)}

@@ -59,7 +59,7 @@ def draw_banner(frame, color, bbox, track_id):
 
 def draw_pointer(frame, bbox,color = (0, 255, 255), size = 15):
 
-    x1, y1, x2, y2 = bbox 
+    x1, y1, x2, _ = bbox 
 
     # Define los tres vértices del triángulo (apunta hacia arriba)
     pt1 = (((x1 + x2) / 2), y1-5)
@@ -70,5 +70,18 @@ def draw_pointer(frame, bbox,color = (0, 255, 255), size = 15):
 
     # Dibuja el contorno del triángulo
     cv2.drawContours(frame, [triangle_cnt], 0, color, 2)
+    
+    return frame
+
+
+def draw_point(frame, x, y, color = (255, 192, 203)):
+
+    center = (int(x), int(y))
+    cv2.circle( frame, 
+               center,
+               radius=5,
+               color = color,
+               thickness= 5
+               )
     
     return frame

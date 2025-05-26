@@ -27,3 +27,8 @@ def nearest_bbox(bbox, players):
             nearest_track_id = track_id
     
     return (nearest_track_id)
+
+def get_bottom_center(bbox):
+
+    _, y1, x2, y2 = bbox
+    return (int(x2), int((y1 + y2) / 2))
