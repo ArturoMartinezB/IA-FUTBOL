@@ -121,8 +121,9 @@ class KeyPointer:
             output_images.append(field_image)
 
             #Utilizo los puntos convertidos para obtener las distancias reales recorridas por los jugadores y también las velocidades
-            self.update_player_distance(distance_1, 1)
-            self.update_player_distance(distance_2, 2)
+            if frame_num == 0:
+                self.update_player_distance(distance_1, 1)
+                self.update_player_distance(distance_2, 2)
            
         return output_images
     
@@ -216,14 +217,15 @@ class KeyPointer:
 
             team = getattr(self.match, f"team_{team_number}")
             player_stats = team.get_player_stats_with_id(track_id)
+            
+            if player_stats is not None:
+                last_point = player_stats.last_point
+                if player_stats.last_point is None:
 
-            last_point = player_stats.last_point
-            if player_stats.last_point is None:
-
-                player_stats.last_point = point
-            else:
-                distance = bbox_utils.euclidean_distance_points(last_point,point)
-                player_stats.update_distance(distance)
+                    player_stats.last_point = point
+                else:
+                    distance = bbox_utils.euclidean_distance_points(last_point,point)
+                    player_stats.update_distance(distance)
 
             
 

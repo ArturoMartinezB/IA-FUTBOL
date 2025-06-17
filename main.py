@@ -19,7 +19,7 @@ def main():
     match = Match(team_1,team_2)
 
     #Obtener frames del video
-    frames = read_video("data/video_test/prueba2.mp4")
+    frames = read_video("data/video_test/prueba3.mp4")
 
     #KEYPOINTS
     model_keypoints = YOLO("models/keypoints-500ep-48b-640imgsz.pt")  # Cargar el modelo YOLOv8-pose tuneado
@@ -29,13 +29,14 @@ def main():
     model = YOLO("models/yolo9-60ep-8b-960imgsz.pt")  # Cargar el modelo YOLOv9 tuneado
 
     #Objeto Tracker y Estadísticas del partido
-    tracker = Tracker(model,match)
     match_stats = MatchStats(match)
+    tracker = Tracker(model,match,match_stats)
+    
 
     output_frames = []
     output_field_images = []
     all_tracks = []
-    output_path = "stubs/prueba4.json"
+    output_path = "stubs/prueba3.json"
 
     #CON STUBS
     if os.path.exists(output_path):
@@ -93,8 +94,8 @@ def main():
     
 
     #Rearmar video
-    #write_video(output_frames, "data/video_test/prueba3_tracked_dorsalX.mp4")
-    write_video(output_field_images, "data/video_test/prueba2_field_images.mp4")
+    write_video(output_frames, "data/video_test/prueba3_tracked_dorsalX.mp4")
+    #write_video(output_field_images, "data/video_test/prueba2_field_images.mp4")
     print("Video guardado")
     
     end_time = time.time()

@@ -58,7 +58,7 @@ class Team:
                     
                     return self.players_stats[dorsal]
             
-        print("NO SE HAN PODIDO OBTENER LAS STATS DEL JUGADOR CON ESE TRACK_ID")
+        print("NO SE HAN PODIDO OBTENER LAS STATS DEL JUGADOR CON TRACK_ID: ", track_id)
         return None
 
     

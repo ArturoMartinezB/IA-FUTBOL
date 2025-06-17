@@ -373,7 +373,7 @@ class Tracker:
                 track_id = gk[0]
 
                 drawing_utils.draw_ellipse(frame, color, bbox)
-                drawing_utils.draw_banner(frame,color,bbox,dorsal)
+                drawing_utils.draw_banner(frame,color,bbox,1)
             
             for ball in tracks['ball']:
 

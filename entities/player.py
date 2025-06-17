@@ -46,9 +46,10 @@ class Player:
 
     def print_stats(self):
 
+        print("\n")
         print("Dorsal: ", self.dorsal)
         print("------------------------")
         print(f"Distancia recorrida: {self.distance:.2f} m")
-        print(f"Velocidad máxima: {self.max_vel:.2f} m")
+        print(f"Velocidad máxima: {self.max_vel:.2f} m/s")
         print("Pases: ", self.passes)
         print("Pérdidas de balón: ", self.turn_overs)
