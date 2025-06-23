@@ -23,7 +23,7 @@ class Tracker:
     def detect_frames(self,frames):
 
         #Prediciciones con el modelo entrenado
-        results = self.model.predict(frames,device="cuda:1")
+        results = self.model.predict(frames,device="cuda:0")
 
         ''' Se pasan los resultados a formato sv detections ||  El último array contiene el nombre de las clases de los objetos detectados'''
             

@@ -2,6 +2,8 @@ import supervision as sv
 import cv2
 import numpy as np
 from utils import drawing_utils, bbox_utils
+from pathlib import Path
+
 
 class KeyPointer:
 
@@ -11,7 +13,14 @@ class KeyPointer:
         self.match = match
         self.H = None
         self.H_points_used = 0
-        self.field_image = cv2.imread("data/field_map.png")
+
+        current_dir = Path(__file__).parent.absolute()
+        project_root = current_dir.parent
+        map_route = project_root / "data/field_map.png"
+
+        self.field_image = cv2.imread(str(map_route))
+
+
         self.field_image_offset_x = 30 # En la foto del campo que utilizo de fondo para el mapeado, hay una distancia entre las líneas del campo y el pixel 0,0 de la imagen,
         self.field_image_offset_y = 30   
         self.cenital_points= np.array([

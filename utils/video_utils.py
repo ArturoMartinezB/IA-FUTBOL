@@ -17,6 +17,8 @@ def read_video(path):
     return frames
 
 def write_video(frames, path):
+
+    print("Gurdando video en : ", path)
     height, width, _ = frames[0].shape
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(path, fourcc, 25, (width, height))
