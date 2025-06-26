@@ -36,7 +36,7 @@ def main():
     output_frames = []
     output_field_images = []
     all_tracks = []
-    output_path = "stubs/prueba.json"
+    output_path = "stubs/prueba3.json"
 
     #CON STUBS
     if os.path.exists(output_path):

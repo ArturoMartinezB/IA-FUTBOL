@@ -12,11 +12,13 @@ class Player:
         self.passes = 0
         self.turn_overs = 0
         self.last_point = None
-        self.velocity = 0.0
 
     def update_distance(self, dis):
         self.distance += (dis / 100)
-        self.velocity = (dis / 100) # ya que comparo la distancia recorrida en cada frame 0, hasta el siguiente batch falta un segundo con lo que la velocidad es en cm/s 
+        # ya que comparo la distancia recorrida en cada frame 0, hasta el siguiente batch falta un segundo con lo que la velocidad es en cm/s 
+        
+        if (dis/100) > 10:
+            return None
         
         if (dis / 100) > self.max_vel: 
 
@@ -46,11 +48,13 @@ class Player:
 
     def print_stats(self):
 
+        vel = float(self.distance/30)
         print("\n")
         print("Dorsal: ", self.dorsal)
         print("------------------------")
         print(f"Distancia recorrida: {self.distance:.2f} m")
         print(f"Velocidad máxima: {self.max_vel:.2f} m/s")
+        print(f"Velocidad media: {vel:.2f} m/s")
         print("Pases: ", self.passes)
         print("Pérdidas de balón: ", self.turn_overs)
 

@@ -1,0 +1,9 @@
+supervision
+torch
+numpy
+ultralytics
+streamlit
+pandas
+scikit-learn
+matplotlib
+opencv-python

@@ -4,6 +4,7 @@ Sistema de análisis visual de partidos de fútbol mediante inteligencia artific
 
 ## 📸 Vista previa
 
+![Demo](demo.gif)
 
 ## 🚀 Características principales
 
