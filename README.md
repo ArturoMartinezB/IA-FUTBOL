@@ -4,7 +4,7 @@ Sistema de análisis visual de partidos de fútbol mediante inteligencia artific
 
 ## 📸 Vista previa
 
-
+![Demo del sistema](demo.gif)
 ## 🚀 Características principales
 
 - Detección de jugadores, porteros, árbitros y balón con YOLOv9
