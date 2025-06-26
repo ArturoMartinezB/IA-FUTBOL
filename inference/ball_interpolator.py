@@ -3,9 +3,9 @@ import pandas as pd
 
 class BallInterpolator:
 
-    def __init__(self):
-
-        pass 
+    def __init__(self,match_stats):
+        
+        self.stats = match_stats 
 
     def interpolate_ball(self, tracks_by_frame):  
 
@@ -42,5 +42,6 @@ class BallInterpolator:
                 if not tracks_by_frame[num].get('ball'):
                     
                     tracks_by_frame[num]['ball'] = [(track_id, df_detections.iloc[num].to_numpy().tolist())]
+                    self.stats.ball_interpolations += 1
 
         return tracks_by_frame

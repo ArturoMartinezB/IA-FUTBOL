@@ -43,7 +43,7 @@ def main():
             
             with st.spinner("Procesando video..."):
                 # Aquí llamarías a tu sistema de detección
-                video_anotado, mapa_superior, estadisticas_t1, estadisticas_t2 = video_processor.process_video(
+                video_anotado, mapa_superior, estadisticas_deteccion, estadisticas_t1, estadisticas_t2 = video_processor.process_video(
                     temp_path, config
                 )
                 
@@ -52,13 +52,14 @@ def main():
                     'processed': True,
                     'video_anotado': video_anotado,
                     'mapa_superior': mapa_superior,
+                    'estadisticas_deteccion': estadisticas_deteccion, 
                     'estadisticas_t1': estadisticas_t1,
                     'estadisticas_t2': estadisticas_t2
                 })
     
     # Mostrar resultados si están disponibles
     if st.session_state.get('processed', False):
-        results_display.render_results()
+        results_display.render_results(config)
 
 if __name__ == "__main__":
     main()

@@ -16,12 +16,14 @@ class Tracker:
         self.tracker = sv.ByteTrack()
         self.match = match
         self.stats = match_stats
-        self.ball_interpolator = BallInterpolator()
+        self.ball_interpolator = BallInterpolator(match_stats)
         self.clases = {'ball': 0, 'goalkeeper': 1, 'player': 2, 'referees': 3}
         self.track_order = {'bbox': 0, 'mask': 1, 'confidence': 2, 'class_id': 3, 'track_id': 4, 'class_name': 5} # orden de los elementos en el array de detecciones
 
     def detect_frames(self,frames):
 
+        #height, width = frames[0].shape[:2]
+        #print(f"Tamaño de frames de detección de jugadores {width}x{height}")
         #Prediciciones con el modelo entrenado
         results = self.model.predict(frames,device="cuda:0")
 
@@ -37,6 +39,7 @@ class Tracker:
         tracked_batch =[] 
         tracks_by_frame = {}
         
+        self.stats.total_detections += len(detections)
         for frame, dets in enumerate(detections):     #dets contiene las detecciones de un frame 
 
             #FORMATO TRACKED_BATCH --> igual que detections pero con el track_id obtenido
@@ -64,6 +67,7 @@ class Tracker:
 
                 if tracks[class_id] == self.clases['player']:
                     players.append((tracks[track_id], tracks[bbox]))
+                    self.stats.total_players_detected += 1
 
                 elif tracks[class_id] == self.clases['referees']:
                     
@@ -75,6 +79,7 @@ class Tracker:
 
                 elif tracks[class_id] == self.clases['ball']:   
                     pass
+                    
             
             #AL TENER UN SCORE BAJO LA DETECCIÓN DEL BALÓN, EL TRACKER LO ESTÁ IGNORANDO
             # AÑADIRLO MANUALMENTE A TRACKS_BY_FRAME DESDE DETS
@@ -84,8 +89,9 @@ class Tracker:
                 class_id = int(obj[3])  
 
                 if class_id == self.clases['ball']:
-
+                    self.stats.ball_detections += 1
                     ball.append(("O", bbox))
+                    
 
             tracks_by_frame[frame] = {
                 'players':players, 
@@ -112,12 +118,14 @@ class Tracker:
                 
                 if team == 0:
                     if False == self.match.team_1.add_player(track_id):
-                        print("no se ha añadido al jugador: ", track_id)
+                        #print("no se ha añadido al jugador: ", track_id)
+                        pass
                         
                 
                 else: 
                     if False == self.match.team_2.add_player(track_id):
-                        print("no se ha añadido al jugador_2: ", track_id)
+                        #print("no se ha añadido al jugador_2: ", track_id)
+                        pass
 
     def assign_referees(self, tracks_by_frame):
 
@@ -242,7 +250,7 @@ class Tracker:
             if lost_players_with_bbox == []:
 
                 for lost in lost_ids:
-                    print("Lost _id linea 241 ", lost)
+                    #print("Lost _id linea 241 ", lost)
                     if lost is not None:
                         lost_players_with_bbox.append((lost, team.last_position[lost]))  # FALTA UN CASO POR CUBRIR que un track_id si que esté en este batch y el otro no 
                                                                                         #(dudo sobre la veracidad del último bbox)
@@ -300,10 +308,10 @@ class Tracker:
 
                     if dist1 < dist2: 
                         if self.match.team_1.add_player(track_id) == False:
-                            print("Este se intenta añadir a través de recover al team 1: ", track_id)
+                            #print("Este se intenta añadir a través de recover al team 1: ", track_id)
                             if self.recover_track_id(num, track_id, bbox, tracks_by_frame, 1):
                                 added.append(track_id)
-                                print("se añadió con recover_track_id: ", track_id)
+                                #print("se añadió con recover_track_id: ", track_id)
                                 self.match.team_1.update_last_position(track_id,bbox)
                         else:
                             self.match.team_1.update_last_position(track_id,bbox)
@@ -311,7 +319,7 @@ class Tracker:
                             
                     else:
                         if self.match.team_2.add_player(track_id) == False:
-                            print("Este se intenta añadir a través de recover al team 2: ", track_id)
+                            #print("Este se intenta añadir a través de recover al team 2: ", track_id)
                             if self.recover_track_id(num, track_id, bbox, tracks_by_frame, 2):
                                 added.append(track_id)
                                 self.match.team_2.update_last_position(track_id,bbox)
@@ -351,7 +359,7 @@ class Tracker:
                     dorsal = self.match.team_2.get_dorsal(track_id)
                     
                 else:
-                    color = (0,125,225)
+                    color = (128, 128, 128)
                     dorsal = None
                 
                 drawing_utils.draw_ellipse(frame, color, bbox)
@@ -411,22 +419,22 @@ class Tracker:
         wrongly_in_team1 = []
         wrongly_in_team2 = []
 
-        for num, frame in enumerate(tracks_by_frame):
-            for track_id , bbox in tracks_by_frame[num]['players']:
+        
+        for track_id , bbox in tracks_by_frame[len(frames)-1]['players']:
 
-                    team_assigned_1 = self.match.belongs_to(track_id)  
+            team_assigned_1 = self.match.belongs_to(track_id)  
 
-                    distance_1_1 = color_utils.color_distance(colors_per_id[track_id], self.match.team_1.color)
-                    distance_1_2 = color_utils.color_distance(colors_per_id[track_id], self.match.team_2.color)
+            distance_1_1 = color_utils.color_distance(colors_per_id[track_id], self.match.team_1.color)
+            distance_1_2 = color_utils.color_distance(colors_per_id[track_id], self.match.team_2.color)
 
 
-                    if distance_1_1 < distance_1_2 and team_assigned_1 == 2: 
-                        if not any(tid == track_id for tid, _ in wrongly_in_team1):
-                            wrongly_in_team1.append((track_id,bbox))
+            if distance_1_1 < distance_1_2 and team_assigned_1 == 2: 
+                if not any(tid == track_id for tid, _ in wrongly_in_team1):
+                    wrongly_in_team1.append((track_id,bbox))
 
-                    elif distance_1_1 > distance_1_2 and team_assigned_1 == 1: 
-                        if not any(tid == track_id for tid, _ in wrongly_in_team2):
-                            wrongly_in_team2.append((track_id,bbox))
+            elif distance_1_1 > distance_1_2 and team_assigned_1 == 1: 
+                if not any(tid == track_id for tid, _ in wrongly_in_team2):
+                    wrongly_in_team2.append((track_id,bbox))
 
         if len(wrongly_in_team1) > 0 or len(wrongly_in_team2) > 0:
 
@@ -445,13 +453,14 @@ class Tracker:
 
                 for (track_id1, bbox1), (track_id2, bbox2) in matches:
                     
-                    print(f"Se pretende swappear a {track_id1} con {track_id2}")
+                    #print(f"Se pretende swappear a {track_id1} con {track_id2}")
                     self.swap_players(track_id1,track_id2)
 
 
             else:
 
-                print(f"Hay jugadores mal asignados asimétricamente, hay {len(wrongly_in_team1)} mal asignados en el equipo 1 y {len(wrongly_in_team2)} mal asignados en el equipo 2")
+                #print(f"Hay jugadores mal asignados asimétricamente, hay {len(wrongly_in_team1)} mal asignados en el equipo 1 y {len(wrongly_in_team2)} mal asignados en el equipo 2")
+                pass
 
     def check_changed_team(self, collided_track_ids, colors_per_id): 
 
@@ -506,7 +515,7 @@ class Tracker:
         team_2 = self.match.belongs_to(wrong_dorsal_id)
 
         if team_1 != team_2:
-            print(f"COLISIÓN CON CAMBIO PARCIAL: NO SON IGUALES {wrong_dorsal_id}, {wrong_team_id}")
+            #print(f"COLISIÓN CON CAMBIO PARCIAL: NO SON IGUALES {wrong_dorsal_id}, {wrong_team_id}")
             pass
 
         else:
@@ -519,14 +528,14 @@ class Tracker:
 
                 self.match.team_1.get_player_stats_with_id(wrong_dorsal_id).add_track_id(wrong_team_id)
 
-                print("CAMBIO TRAS CHOQUE EN EL EQUIPO 1")
+                #print("CAMBIO TRAS CHOQUE EN EL EQUIPO 1")
             
             elif team_1 == 2: 
 
                 wrong_team_key = self.get_key(self.match.team_2.players, wrong_team_id)
                 wrong_dorsal_key = self.get_key(self.match.team_2.players, wrong_dorsal_id)
 
-                print("cambio de dorsal", wrong_dorsal_id)
+                #print("cambio de dorsal", wrong_dorsal_id)
                 self.match.team_2.players[wrong_dorsal_key] = None
                 self.match.team_2.players[wrong_team_key] = wrong_dorsal_id
 
@@ -540,10 +549,11 @@ class Tracker:
 
     def swap_players(self,player_a, player_b):
         
-        print(f"Swapping players {player_a} and {player_b}")
+        #print(f"Swapping players {player_a} and {player_b}")
         if self.match.team_1.belongs_here(player_a):
             key = self.get_key(self.match.team_1.players, player_a)
             self.match.team_1.players[key] = player_b
+            print("Player a = ", player_a)
             self.match.team_1.get_player_stats_with_id(player_a).add_track_id(player_b)
 
             key = self.get_key(self.match.team_2.players, player_b)
@@ -555,7 +565,7 @@ class Tracker:
 
             key = self.get_key(self.match.team_1.players, player_b)
             self.match.team_1.players[key] = player_a
-            print(f"intentando añadir al historial del equipo 1 a {player_a} donde antes estaba {player_b}")
+            #print(f"intentando añadir al historial del equipo 1 a {player_a} donde antes estaba {player_b}")
             self.match.team_1.get_player_stats_with_id(player_b).add_track_id(player_a)
 
             key = self.get_key(self.match.team_2.players, player_a)
@@ -567,7 +577,6 @@ class Tracker:
     def detect_n_track(self, frame_batch, batch_number):
         
         detections = [] 
-        output_frames = []
         batched_tracks = []
         
         #hilo 1
@@ -594,16 +603,16 @@ class Tracker:
             
             if (new_players := self.check_new_players(tracks_by_frame)):
 
-                self.assign_new_players(new_players, frame_batch, tracks_by_frame)
+               self.assign_new_players(new_players, frame_batch, tracks_by_frame)
 
 
 
-            #Dos maneras de comprobar errores, con colisión o en cada batch
-            '''if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
+            #Dos maneras de comprobar errores, con colisión o en cada batch. Con colisión es mucho más rápido.
+            if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
                 
                 self.check_changed_team(collided_players, color_utils.get_players_colors(frame_batch,tracks_by_frame))
-            '''
-            self.check_wrong_team_assignation(frame_batch,tracks_by_frame)
+            
+            #self.check_wrong_team_assignation(frame_batch,tracks_by_frame)
 
 
         #hilo 3 (podemos meter aquí las colisiones también, que realentizan un poco)
@@ -634,11 +643,11 @@ class Tracker:
                 self.assign_new_players(new_players, frame_batch, tracks_by_frame)
 
             #Dos maneras de comprobar errores, con colisión o en cada batch
-            '''if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
+            if (collided_players := self.check_collision(frame_batch,tracks_by_frame)):
                 
                 self.check_changed_team(collided_players, color_utils.get_players_colors(frame_batch,tracks_by_frame))
-            '''
-            self.check_wrong_team_assignation(frame_batch,tracks_by_frame)
+            
+            #self.check_wrong_team_assignation(frame_batch,tracks_by_frame)
 
         #hilo 3 (podemos meter aquí las colisiones también, que realentizan un poco)
         

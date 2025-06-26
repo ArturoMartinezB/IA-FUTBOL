@@ -10,6 +10,14 @@ class MatchStats:
         self.last_possessor = None
         self.possession_1_frames = 0
         self.possession_2_frames = 0
+        self.total_passes = 0
+        self.total_turnovers = 0
+        self.total_detections = 0
+        self.total_players_detected = 0
+        self.ball_detections = 0
+        self.ball_interpolations = 0
+        self.total_detection_time = 0.0
+        self.total_keypoint_time = 0.0
 
     def get_possessor(self, ball_bbox, players):
 
@@ -87,17 +95,17 @@ class MatchStats:
 
                 dorsal = self.match.team_1.get_player_stats_with_id(track_id).dorsal
 
-                print("El jugador esta en el equipo uno y su nuevo track_id es:", self.match.team_1.players[dorsal])
+                #print("El jugador esta en el equipo uno y su nuevo track_id es:", self.match.team_1.players[dorsal])
                 return self.match.team_1.players[dorsal]
             
             elif self.match.team_2.get_player_stats_with_id(track_id) is not None:
 
                 dorsal = self.match.team_2.get_player_stats_with_id(track_id).dorsal
 
-                print("El jugador esta en el equipo dos y su nuevo track_id es:", self.match.team_2.players[dorsal])
+                #print("El jugador esta en el equipo dos y su nuevo track_id es:", self.match.team_2.players[dorsal])
                 return self.match.team_2.players[dorsal]
             else:
-                print("TRACK_ID EN NINGUNA LISTA DE PLAYER_SHEETS")
+                #print("TRACK_ID EN NINGUNA LISTA DE PLAYER_SHEETS")
                 return None
 
         else:  
@@ -117,7 +125,7 @@ class MatchStats:
         
         if last_possessor is None or possessor is None:
 
-            print("check_change_of_possession ha recibido un None como jugador")
+            #print("check_change_of_possession ha recibido un None como jugador")
             return None
 
         if self.match.belongs_to(last_possessor) == self.match.belongs_to(possessor):
@@ -126,31 +134,34 @@ class MatchStats:
             self.update_pass(last_possessor)
             self.last_possessor = possessor
 
+            '''
             if 1 == self.match.belongs_to(last_possessor):
                 print(f"El jugador {self.match.team_1.get_dorsal(last_possessor)}, se la ha pasado a {self.match.team_1.get_dorsal(possessor)}")
             
             else:
                 print(f"El jugador {self.match.team_2.get_dorsal(last_possessor)}, se la ha pasado a {self.match.team_2.get_dorsal(possessor)}")
-
+            '''
         elif self.match.belongs_to(last_possessor) != self.match.belongs_to(possessor):
             
-            print("el jugador uno pertenece al equipo: ", self.match.belongs_to(last_possessor))
-            print("el jugador dos pertenece al equipo: ", self.match.belongs_to(possessor))
+            #print("el jugador uno pertenece al equipo: ", self.match.belongs_to(last_possessor))
+            #print("el jugador dos pertenece al equipo: ", self.match.belongs_to(possessor))
             self.update_turn_over(last_possessor)
             self.last_possessor = possessor
-
+            '''
             if 1 == self.match.belongs_to(last_possessor):
                 print(f"El jugador {self.match.team_1.get_dorsal(last_possessor)} ha perdido el balón y lo ha interceptado {self.match.team_2.get_dorsal(possessor)}")
             
             else:
                 print(f"El jugador {self.match.team_2.get_dorsal(last_possessor)} ha perdido el balón y lo ha interceptado {self.match.team_1.get_dorsal(possessor)}")
-
+            '''
         else:
-            print("check_change_of_possession no entra en los casos,  almenos uno de los players no está en ningún equipo")
+           # print("check_change_of_possession no entra en los casos,  almenos uno de los players no está en ningún equipo")
+           pass
 
     def update_pass(self, player_id):
 
         team = self.match.belongs_to(player_id)
+        self.total_passes += 1
 
         if team == 1:
 
@@ -162,6 +173,7 @@ class MatchStats:
     def update_turn_over(self, player_id):
 
         team = self.match.belongs_to(player_id)
+        self.total_turnovers += 1
 
         if team == 1:
 
@@ -186,7 +198,7 @@ class MatchStats:
 
         total_frames = self.possession_1_frames + self.possession_2_frames
 
-        return (float(self.possession_1_frames/total_frames), float(self.possession_2_frames/total_frames))
+        return (float((self.possession_1_frames/total_frames)*100), float((self.possession_2_frames/total_frames)*100))
 
     def draw_possession(self, possessor_per_frame, tracks_by_frame, frames):
 
@@ -206,3 +218,23 @@ class MatchStats:
     def print_match_stats(self):
 
         print("Possession: ",self.get_match_possession)
+
+    def get_total_stats(self):
+        posesion_1, posesion_2 =  self.get_match_possession()
+
+        total_stats = {
+            'possession_1': posesion_1,
+            'possession_2': posesion_2,
+            'passes': self.total_passes,
+            'detections': self.total_detections,
+            'players_detections': self.total_players_detected,
+            'ball_detections': self.ball_detections,
+            'ball_interpolations': self.ball_interpolations,
+            'detection_time': self.total_detection_time,
+            'time_per_frame_detected': float(self.total_detection_time/750),
+            'keypoint_time': self.total_keypoint_time,
+            'time_per_frame_keypoint': float(self.total_keypoint_time/750)
+
+        }
+
+        return total_stats

@@ -8,8 +8,8 @@ class Team:
         self.color = None 
         self.players = {number: None for number in range(2, 12)}
         self.players_stats = {number: None for number in range(2, 12)}
-        self.goalkeeper = None
         self.last_position = {}
+        self.total_players_added = 0
 
     def assign_team_color(self, color):
         self.color = color
@@ -22,6 +22,7 @@ class Team:
                     self.players[dorsal] = int(track_id)
                     self.players_stats[dorsal] = Player(dorsal, int(track_id), int(self.team_id))
                     print(f"jugador {track_id} añadido")
+                    self.total_players_added += 1
                     return True
 
         #Si llega a este punto, no hay dorsales libres --> El jugador que se intenta añadir ya ha aparecido con anterioridad en el video
@@ -58,7 +59,7 @@ class Team:
                     
                     return self.players_stats[dorsal]
             
-        print("NO SE HAN PODIDO OBTENER LAS STATS DEL JUGADOR CON TRACK_ID: ", track_id)
+        #print("NO SE HAN PODIDO OBTENER LAS STATS DEL JUGADOR CON TRACK_ID: ", track_id)
         return None
 
     
@@ -86,3 +87,31 @@ class Team:
             if player_stats is not None: 
 
                 player_stats.print_stats()
+
+    def get_total_distance(self):
+
+        total_distance = 0
+        for i in range(2,12): 
+            player_stats = self.players_stats[i]
+
+            if player_stats is not None: 
+
+                total_distance += player_stats.distance
+
+        return total_distance 
+    
+    def get_players_stats_sheets(self):
+
+        color = self.color
+        stats_sheets = []
+        for i in range(2,12): 
+            player_stats = self.players_stats[i]
+
+            if player_stats is not None: 
+
+                stats_sheets.append(player_stats.get_stats_sheet())
+
+        dicc = {'color': color,
+                'stats_sheets': stats_sheets}
+        return dicc
+    

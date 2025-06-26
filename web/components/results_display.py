@@ -14,28 +14,46 @@ sys.path.append(str(project_root))
 class ResultsDisplay:
     """Clase para mostrar los resultados del análisis"""
     
-    def render_results(self):
+    def render_results(self, config):
         """Renderizar todos los resultados"""
         st.markdown("---")
         st.markdown('<p class="section-header">🎯 Resultados del Análisis</p>', unsafe_allow_html=True)
         
-        # Video anotado ocupando todo el ancho
-        self._render_annotated_video()
-        
-        # Separador
-        st.markdown("---")
-        
-        # Crear dos columnas para mapa superior y estadísticas
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            self._render_top_view_video()
-        
-        with col2:
-            self._render_statistics_t1()
+        resultados = config['resultados']
 
-        with col3:
-            self._render_statistics_t2()
+        # Video anotado ocupa todo el ancho si está activado
+        if resultados.get('Video anotado', False):
+            self._render_annotated_video()
+            st.markdown("---")
+
+        # Primer bloque: mapa y stats del procesamiento
+        bloques = []
+        if resultados.get('Mapeado del video', False):
+            bloques.append(self._render_top_view_video)
+        if resultados.get('Estadísticas del procesamiento', False):
+            bloques.append(self._render_stats_procesamiento)
+
+        if bloques:
+            cols = st.columns(len(bloques))
+            for col, render_fn in zip(cols, bloques):
+                with col:
+                    render_fn()
+
+            st.markdown("---")
+
+        # Segundo bloque: stats por equipo
+        bloques_equipo = []
+        if resultados.get('Estadísticas equipo 1', False):
+            bloques_equipo.append(lambda: self._render_stats_equipo(1))
+        if resultados.get('Estadísticas equipo 2', False):
+            bloques_equipo.append(lambda: self._render_stats_equipo(2))
+
+        if bloques_equipo:
+            cols = st.columns(len(bloques_equipo))
+            for col, render_fn in zip(cols, bloques_equipo):
+                with col:
+                    render_fn()
+
     
     def _render_annotated_video(self):
         """Renderizar sección del video anotado"""
@@ -80,8 +98,8 @@ class ResultsDisplay:
             compatible_path = tmp_file.name
         
         # Verificar si ya existe la versión compatible
-        if hasattr(st.session_state, 'compatible_video') and os.path.exists(st.session_state.compatible_video):
-            return st.session_state.compatible_video
+        '''if hasattr(st.session_state, 'compatible_video') and os.path.exists(st.session_state.compatible_video):
+            return st.session_state.compatible_video'''
         
         try:
             # Abrir video original
@@ -101,6 +119,9 @@ class ResultsDisplay:
             
             # Procesar frames
             frame_count = 0
+
+            st.text(f"🔄 Recodificando para visualización")
+
             while True:
                 ret, frame = cap.read()
                 if not ret:
@@ -109,10 +130,6 @@ class ResultsDisplay:
                 out.write(frame)
                 frame_count += 1
                 
-                # Mostrar progreso cada 100 frames
-                if frame_count % 100 == 0:
-                    st.text(f"Recodificando para visualización: {frame_count} frames")
-            
             # Limpiar
             cap.release()
             out.release()
@@ -139,8 +156,8 @@ class ResultsDisplay:
         
         # Cuando tengas el video real, descomenta:
         if os.path.exists(st.session_state['mapa_superior']):
-    # Mostrar video
-            st.video(st.session_state['mapa_superior'])
+        # Mostrar video
+            st.video(self._create_streamlit_compatible_video(st.session_state['mapa_superior']))
             
             # Leer archivo una sola vez
             with open(st.session_state['mapa_superior'], "rb") as file:
@@ -158,86 +175,93 @@ class ResultsDisplay:
             st.error("Mapa superior no encontrado")
         
        
-            
+    def _render_stats_procesamiento(self):
+        st.subheader("⚙️ Estadísticas del procesamiento")
 
-    def _render_statistics_t1(self):
-        """Renderizar sección de estadísticas"""
-        st.subheader("📊 Estadísticas")
+        etiquetas = {
+            'possession_1': 'Posesión equipo 1',
+            'possession_2': 'Posesión equipo 2',
+            'passes': 'Pases detectados',
+            'detections': 'Detecciones totales',
+            'players_detections': 'Detecciones de jugadores',
+            'ball_detections': 'Detecciones de balón',
+            'ball_interpolations': 'Interpolaciones de balón',
+            'detection_time': 'Tiempo total de detección (s)',
+            'time_per_frame_detected': 'Tiempo por frame (detección)',
+            'keypoint_time': 'Tiempo total keypoints (s)',
+            'time_per_frame_keypoint': 'Tiempo por frame (keypoints)'
+        }
         
-        stats = st.session_state['estadisticas_t1']
-        
-        # Mostrar métricas principales
-        self._render_main_metrics(stats)
-        
-        # Mostrar datos completos
-        st.subheader("Datos Completos")
-        self._render_detailed_stats(stats)
-        
-        # Botón de descarga
-        self._render_download_button(stats, 1)
-    
+        total_stats = st.session_state['estadisticas_proceso']
+        for clave, valor in total_stats.items():
+            etiqueta = etiquetas.get(clave, clave)
+            st.metric(label=etiqueta, value=round(valor, 2) if isinstance(valor, float) else valor)
 
-    def _render_statistics_t2(self):
-        """Renderizar sección de estadísticas"""
-        st.subheader("📊 Estadísticas")
-        
-        stats = st.session_state['estadisticas_t2']
-        
-        # Mostrar métricas principales
-        self._render_main_metrics(stats)
-        
-        # Mostrar datos completos
-        st.subheader("Datos Completos")
-        self._render_detailed_stats(stats)
-        
-        # Botón de descarga
-        self._render_download_button(stats, 2)
-    
+        st.download_button(
+            label="📥 Descargar estadísticas del procesamiento",
+            data=str(total_stats),
+            file_name="estadisticas_procesamiento.txt"
+        )
 
-    def _render_main_metrics(self, stats):
-        """Renderizar métricas principales"""
-        if isinstance(stats, dict):
-            # Métricas destacadas
-            key_metrics = {
-                'jugadores_detectados': 'Jugadores',
-                'precision_promedio': 'Precisión',
-                'frames_totales': 'Frames',
-                'tiempo_procesamiento': 'Tiempo (s)'
-            }
-            
-            for key, label in key_metrics.items():
-                if key in stats:
-                    value = stats[key]
-                    if key == 'precision_promedio':
-                        st.metric(label, f"{value:.1%}")
-                    elif key == 'tiempo_procesamiento':
-                        st.metric(label, f"{value:.1f}s")
-                    else:
-                        st.metric(label, value)
-    
-    def _render_detailed_stats(self, stats):
-        """Renderizar estadísticas detalladas"""
-        if isinstance(stats, dict):
-            # Mostrar como JSON expandible
-            st.json(stats)
-            
-            # También como tabla si es útil
-            if len(stats) > 0:
-                df_stats = pd.DataFrame([
-                    {'Métrica': k.replace('_', ' ').title(), 'Valor': v} 
-                    for k, v in stats.items()
-                ])
-                st.dataframe(df_stats, use_container_width=True, hide_index=True)
-                
-        elif isinstance(stats, list):
-            # Si es una lista, mostrar como tabla
-            df = pd.DataFrame(stats)
-            st.dataframe(df, use_container_width=True)
+    def _render_stats_equipo(self, equipo=1):
+        # Input para editar el nombre del equipo
+        nombre_equipo = st.text_input(
+            "Nombre del equipo:", 
+            value=f"Equipo {equipo}", 
+            key=f"nombre_equipo_{equipo}"
+        )
         
-        else:
-            st.text(f"Tipo de estadísticas: {type(stats)}")
-            st.write(stats)
-    
+        # Obtener lista de stats del equipo desde el session_state
+        stats_dicc = st.session_state.get(f'estadisticas_t{equipo}', {})
+        stats_jugadores = stats_dicc['stats_sheets']
+
+        # Convertir color RGB a CSS
+        team_color = stats_dicc['color']  # Por ejemplo (255, 0, 0)
+        rgb_css_color = f"rgb({team_color[2]}, {team_color[1]}, {team_color[0]})"
+
+        # Subheader con cuadrado de color
+        color_box = f'<span style="display:inline-block; width:16px; height:16px; background-color:{rgb_css_color}; border:1px solid #000; margin-right:10px;"></span>'
+        st.markdown(f"## {color_box}📊 Estadísticas {nombre_equipo}", unsafe_allow_html=True)
+
+
+        if not stats_jugadores:
+            st.warning("No hay estadísticas de jugadores disponibles.")
+            return
+
+        # Crear DataFrame y preparar para edición
+        df_stats = pd.DataFrame(stats_jugadores)
+        df_stats = df_stats.sort_values(by="dorsal")
+        
+        # Añadir columna de nombre de jugador si no existe
+        if 'nombre_jugador' not in df_stats.columns:
+            df_stats.insert(0, 'nombre_jugador', '')
+        
+        # Configurar dorsal como índice
+        df_stats_indexed = df_stats.set_index('dorsal')
+        
+        # Editor de datos
+        df_editado = st.data_editor(
+            df_stats_indexed,
+            use_container_width=True,
+            column_config={
+                "nombre_jugador": st.column_config.TextColumn(
+                    "Nombre del Jugador",
+                    help="Introduce el nombre del jugador"
+                )
+            },
+            key=f"editor_stats_{equipo}"
+        )
+
+        # Descargar como CSV
+        df_descarga = df_editado.reset_index()
+        st.download_button(
+            label="📥 Descargar estadísticas",
+            data=df_descarga.to_csv(index=False).encode('utf-8'),
+            file_name=f"estadisticas_{nombre_equipo.replace(' ', '_').lower()}.csv",
+            mime='text/csv',
+            key=f"download_{equipo}"
+        )
+
     def _render_download_button(self, stats, team):
 
         """Renderizar botón de descarga de estadísticas"""

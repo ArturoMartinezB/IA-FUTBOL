@@ -30,18 +30,12 @@ class KeyPointer:
             [9985, 1450.0],[9985, 2584.0],[9985, 4416.0],[9985, 5550.0],[10900, 3500.0],[11450, 2584.0],[11450, 4416.0],
             [12000, 0],[12000, 1450.0], [12000, 2584.0],[12000, 4416.0],[12000, 5550.0],[12000, 7000],
             [5085.0, 3500.0],[6915.0, 3500.0]], dtype=np.float32)
-        self.edges = [
-            [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [6, 7], [9, 10], [10, 11],
-            [11, 12], [13, 14], [14, 15], [15, 16], [17, 18], [18, 19], [19, 20],
-            [22, 23], [24, 25], [25, 26], [26, 27], [27, 28], [28, 29],
-            [0, 13], [1, 9], [2, 6], [3, 7], [4, 12], [5, 16], [13, 24],
-            [17, 25], [22, 26], [23, 27], [20, 28], [16, 29]
-        ]
+        
 
     ###OBTENER LOS KEYPOINTS
     def redimensionar_frames(self, frames, size=(640, 640)):
-        height, width = frames[0].shape[:2]
-        print(f"Tamaño del frame: {width}x{height}")
+        #height, width = frames[0].shape[:2]
+        #print(f"Tamaño del frame: {width}x{height}")
         frames_redimensionados = []
         for frame in frames:
             resized = cv2.resize(frame, size)  # Redimensiona a (width, height)
@@ -50,7 +44,7 @@ class KeyPointer:
 
     def prediction (self, frames):
 
-        results = self.model.predict(self.redimensionar_frames(frames), save=False , imgsz=640)
+        results = self.model.predict(self.redimensionar_frames(frames), save=False , imgsz=640, device="cuda:1")
 
         key_points = [sv.KeyPoints.from_ultralytics(res) for res in results]
 
@@ -83,11 +77,7 @@ class KeyPointer:
                     self.H = H_new
                     self.H_points_used = len(inframe_detected_keypoints)
 
-                '''Esto lo descarto porque los cambios de matriz holográfica lo único que hacen es mover bruscamente los puntos, no veo mejoras en la representación en el mapa
-                elif abs(len(inframe_detected_keypoints) - self.H_points_used) > 4:
-                    self.H = H_new
-                    self.H_points_used = len(inframe_detected_keypoints)
-                '''
+                
             # Una vez tengo la matriz puedo convertir los centros de los bboxes en coordenadas dentro del campo de futbol PARA DIBUJARLOS
             players = tracks_by_frame[frame_num]['players']
             team_1_ids = self.match.team_1.players.values()
@@ -101,7 +91,7 @@ class KeyPointer:
             for track_id, bbox in players:
 
                 point = bbox_utils.get_bottom_center(bbox)
-                point= self.transform_points(self.H, point)
+                point= self.transform_points(self.H, self.resize_1920_to_640(point))
                 point = point[0][0]
 
                 if track_id in team_1_ids:
@@ -121,8 +111,8 @@ class KeyPointer:
             ball_points = self.get_points(ball)
 
             field_image= self.field_image.copy()
-            field_image = self.paint_field_map(field_image, points=self.resize_points_to1110x740(team_1_points), color=self.match.team_1.color)
             field_image = self.paint_field_map(field_image,inframe_cenital_points,(0,0,0))
+            field_image = self.paint_field_map(field_image, points=self.resize_points_to1110x740(team_1_points), color=self.match.team_1.color)
             field_image = self.paint_field_map(field_image, self.resize_points_to1110x740(team_2_points), self.match.team_2.color)
             field_image = self.paint_field_map(field_image, self.resize_points_to1110x740(ref_points), (255, 255, 0))
             field_image = self.paint_field_map(field_image, self.resize_points_to1110x740(ball_points), (0, 255, 255))
@@ -141,7 +131,7 @@ class KeyPointer:
         points = []
         for _ , bbox in tracks:
                 point = bbox_utils.get_bottom_center(bbox)
-                point = self.transform_points(self.H, point)
+                point = self.transform_points(self.H, self.resize_1920_to_640(point))
                 point = point[0][0]
 
                 points.append(point)
@@ -176,6 +166,21 @@ class KeyPointer:
 
         return H
     
+    def resize_1920_to_640(self, point):
+
+        x_640 = 0
+        y_640 = 0
+
+        if len(point) >= 2:
+            x = point[0]
+            y = point[1]
+
+            x_640 = x * 640/1920
+            y_640 = y * 640/1080
+
+        return (x_640, y_640)
+
+        
     def transform_points(self, H, points):
 
         points = np.array(points, dtype=np.float32)
@@ -213,8 +218,8 @@ class KeyPointer:
 
          
         for x, y in points:
-            x_real = x * ( 1080/ 1920)
-            y_real = y * ( 710 / 1080)
+            x_real = x * ( 1080/ 640)
+            y_real = y * ( 710 / 640)
             point = [x_real, y_real]
             resized_points.append(point)
 
@@ -237,4 +242,3 @@ class KeyPointer:
                     player_stats.update_distance(distance)
 
             
-

@@ -79,9 +79,9 @@ def draw_point(frame, x, y, color = (255, 192, 203)):
     center = (int(x), int(y))
     cv2.circle( frame, 
                center,
-               radius=5,
+               radius=6,
                color = color,
-               thickness= 5
+               thickness= -1
                )
     
     return frame

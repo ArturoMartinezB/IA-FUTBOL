@@ -36,19 +36,29 @@ def render_header():
 def render_sidebar():
     """Renderizar sidebar con configuraciones"""
     with st.sidebar:
-        st.header("⚙️ Configuración")
+        st.header("☑️ Seleccione")
         
         # Parámetros de detección
         config = {
-            'confidence_threshold': st.slider("Umbral de confianza", 0.0, 1.0, 0.5, 0.05),
-            'show_trajectories': st.checkbox("Mostrar trayectorias", value=True),
-            'show_ids': st.checkbox("Mostrar IDs", value=True),
-            'model_type': st.selectbox("Modelo", ["YOLOv8", "YOLOv11", "Custom"])
+        'resultados': {
+            "Video anotado": st.sidebar.checkbox("🎥 Video anotado", value=True),
+            "Mapeado del video": st.sidebar.checkbox("🗺️ Mapeado del video", value=True),
+            "Estadísticas equipo 1": st.sidebar.checkbox("🧮 Estadísticas equipo 1", value=True),
+            "Estadísticas equipo 2": st.sidebar.checkbox("🧮 Estadísticas equipo 2", value=False),
+            "Estadísticas del procesamiento": st.sidebar.checkbox("🧠 Estadísticas del procesamiento", value=True),
         }
+}
+
         
         st.markdown("---")
         st.subheader("📊 Info del Sistema")
-        st.info("Modelo: Tu modelo personalizado\nEstado: Listo para procesar")
+        st.markdown("""
+                    > **Modelo de detección por imagen:**  
+                    > YOLOv9 Finetunned  
+                    > **Modelo de detección de keypoints:**  
+                    > YOLOv8s-pose Finetunned
+                    """)
+
         
         return config
 

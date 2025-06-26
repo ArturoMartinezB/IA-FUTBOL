@@ -36,7 +36,7 @@ def main():
     output_frames = []
     output_field_images = []
     all_tracks = []
-    output_path = "stubs/prueba3.json"
+    output_path = "stubs/prueba.json"
 
     #CON STUBS
     if os.path.exists(output_path):
@@ -49,7 +49,6 @@ def main():
 
                 #TRACKING
                 tracks_by_frame = tracker.read_n_track(stub_tracks, batch_number=int(i/25), frame_batch= frame_batch)
-                all_tracks.append(tracks_by_frame)
 
                 tracker.draw_tracks(frame_batch, tracks_by_frame)
                 tracker.stats.draw_possession(match_stats.get_match_stats(tracks_by_frame), tracks_by_frame, frame_batch)
@@ -66,23 +65,45 @@ def main():
         for i in range(0, len(frames), 25):
                 
             frame_batch = frames[i:i+25]
-
+            detection_start_time = time.time()
             #TRACKING
             tracks_by_frame = tracker.detect_n_track(frame_batch, batch_number=int(i/25))
             all_tracks.append(tracks_by_frame)
 
+            detection_end_time = time.time()
+            detection_elapsed_time = detection_end_time - detection_start_time
+            match_stats.total_detection_time += detection_elapsed_time
+            print(f"Detection + asginación de equipos time en batch {(i/25)}: {detection_elapsed_time} ")
+
+            annotation_start_time = time.time()
             tracker.draw_tracks(frame_batch, tracks_by_frame)
             tracker.stats.draw_possession(match_stats.get_match_stats(tracks_by_frame), tracks_by_frame, frame_batch)
             
+            annotation_end_time = time.time()
+            annotation_elapsed_time = annotation_end_time - annotation_start_time
+            print(f"Annotation time en batch {(i/25)}: {annotation_elapsed_time} ")
+
+            keypoints_start_time = time.time()
             #KEYPOINTS AND MAP
             field_images = keypointer.keypoints_main_function(frame_batch, tracks_by_frame)
-            
-            output_field_images.append(field_images)
+            keypoint_end_time = time.time()
+            keypoint_elapsed_time = keypoint_end_time - keypoints_start_time
+            match_stats.total_keypoint_time += keypoint_elapsed_time
+            print(f"Keypoints time en batch {(i/25)}: {keypoint_elapsed_time} ")
+
+            output_field_images = output_field_images + field_images
             output_frames = output_frames + frame_batch
             
         stubs_utils.save_batches_to_json(all_tracks,output_path)
 
-    
+    stats_start = time.time()
+    estadisticas_t1 = match.team_1.get_players_stats_sheets()
+    estadisticas_t2 = match.team_2.get_players_stats_sheets()
+    estadisticas_deteccion = match_stats.get_total_stats()
+    stats_end = time.time()
+
+    stats_time = stats_end-stats_start #prácticamente 0
+    print(f"STATS_TIME = {stats_time}")
     #imprimimos las estadisiticas individuales
     print ("ESTADÍSTICAS EQUIPO 1:")
     match.team_1.print_players_stats()
@@ -90,12 +111,14 @@ def main():
     match.team_2.print_players_stats()
 
     print("ESTADÍSTICAS DEL PARTIDO")
-    print()
+    pos1, pos2 = tracker.stats.get_match_possession()
+    print(f"Posesión equipo 1: {pos1} Posesión equipo 2: {pos2}")
+    # Output: 45 55
     
 
     #Rearmar video
-    write_video(output_frames, "data/video_test/prueba3_tracked_dorsalX.mp4")
-    #write_video(output_field_images, "data/video_test/prueba2_field_images.mp4")
+    write_video(output_frames, "data/video_test/prueba3_tracked_dorsal_rewrite.mp4")
+    write_video(output_field_images, "data/video_test/prueba3_rewrite.mp4")
     print("Video guardado")
     
     end_time = time.time()

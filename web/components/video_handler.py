@@ -79,35 +79,36 @@ class VideoProcessor:
         
     
     def process_video(self, video_path, config):
-        """
-        Procesar video con tu sistema de detección
-        
-        Args:
-            video_path: Ruta al video temporal
-            config: Configuración del sidebar
-            
-        Returns:
-            tuple: (video_anotado_path, mapa_superior_path, estadisticas)
-        """
+
+
         # Control de ejecución única
         video_key = f"processed_{hash(video_path)}"
         if video_key in st.session_state:
             return (st.session_state['video_anotado'], 
-               st.session_state.get('mapa_superior'), 
+               st.session_state.get('mapa_superior'),
+               st.session_state.get('estadisticas_proceso', {}), 
                st.session_state.get('estadisticas_t1', {}),
                st.session_state.get('estadisticas_t2', {}))
+        
+
+        resultados = config['resultados']
+        video_anotado_selected = resultados['Video anotado']
+        mapa_superior_selected = resultados['Mapeado del video']
+        stats_1_selected = resultados['Estadísticas equipo 1']
+        stats_2_selected = resultados['Estadísticas equipo 2']
+        stats_process_selected = resultados['Estadísticas del procesamiento']
+
 
         # Mostrar progreso
         progress_bar = st.progress(0)
         status_text = st.empty()
         
         status_text.text('🔄 Inicializando modelo...')
-        progress_bar.progress(10)
         
         frames = read_video(video_path)
         output_frames = []
         output_field_images = []
-
+        
         for i in range(0, len(frames), 25):
                 
             
@@ -115,111 +116,81 @@ class VideoProcessor:
             progress_bar.progress(progress)
 
             frame_batch = frames[i:i+25]
-            '''
+            
             #TRACKING
 
             status_text.text('🔄 Detectando jugadores...')
 
+            detection_start= time.time()
+
             tracks_by_frame = self.tracker.detect_n_track(frame_batch, batch_number=int(i/25))
-            
+
+            detection_end= time.time()
+            detection_time = detection_end - detection_start
+            self.match_stats.total_detection_time += detection_time
+
             #ANOTACIÓN + STATS
 
+            
             status_text.text('🔄 Anotando frames' )
             self.tracker.draw_tracks(frame_batch, tracks_by_frame)
 
+            
             status_text.text('🔄 Obteniendo estadísticas')
             self.tracker.stats.draw_possession(self.match_stats.get_match_stats(tracks_by_frame), tracks_by_frame, frame_batch)
             
             #KEYPOINTS AND MAP
-
+            
             status_text.text('🔄 Generando mapa ')
+
+            keypoint_start = time.time()
+
             field_images = self.keypointer.keypoints_main_function(frame_batch, tracks_by_frame)
+
+            keypoint_end = time.time()
+            keypoint_time = keypoint_end - keypoint_start
+            self.match_stats.total_keypoint_time += keypoint_time
+            output_field_images = output_field_images + field_images
             
             #ALMACENAJE DE FRAMES
-            output_field_images= output_field_images + field_images
-            '''
+            
             output_frames = output_frames + frame_batch
         
         
+        #GUARDADO DE VÍDEOS Y RETURNS
+
+        #Video anotado
         video_anotado_path = project_root / "web/results/video_anotado.mp4"
-        print(video_anotado_path)
         st.session_state['video_anotado'] = video_anotado_path
 
-        try:
-            write_video(output_frames, video_anotado_path)
-            
-            # DIAGNÓSTICO DETALLADO
-            print(f"🔍 Diagnóstico completo:")
-            print(f"   - Ruta: {video_anotado_path}")
-            print(f"   - Archivo existe: {os.path.exists(video_anotado_path)}")
-            
-            if os.path.exists(video_anotado_path):
-                file_size = os.path.getsize(video_anotado_path)
-                print(f"   - Tamaño archivo: {file_size} bytes")
-                
-                # Verificar permisos
-                print(f"   - Readable: {os.access(video_anotado_path, os.R_OK)}")
-                print(f"   - Writable: {os.access(video_anotado_path, os.W_OK)}")
-                
-                # Verificar con OpenCV directamente
-                import cv2
-                cap = cv2.VideoCapture(str(video_anotado_path))
-                frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                cap.release()
-                
-                print(f"   - Frames en video: {frame_count}")
-                print(f"   - FPS: {fps}")
-                print(f"   - Frames procesados originalmente: {len(output_frames)}")
-                
-            time.sleep(0.5)
-    
-        except Exception as e:
-            print(f"❌ Error completo: {str(e)}")
-            import traceback
-            traceback.print_exc()
-    
-        if os.path.exists(video_anotado_path) and os.path.getsize(video_anotado_path) > 0:
-            st.session_state['video_anotado'] = video_anotado_path
-        else:
-            st.error("❌ Error: El video está vacío")
-            return None, None, None
-        
+        write_video(output_frames, video_anotado_path)
+     
+        #Mapa superior
         mapa_superior_path = project_root / "web/results/mapa_superior.mp4"
         st.session_state['mapa_superior'] = mapa_superior_path
-        '''
-
+    
         write_video(output_field_images,mapa_superior_path)
-        '''
-        estadisticas_t1 = {
-            'jugadores_detectados': 22,
-            'precision_promedio': 0.94,
-            'frames_totales': 1500,
-            'tiempo_procesamiento': 45.2,
-            'detecciones_por_frame': 18.5,
-            'equipo_local': 11,
-            'equipo_visitante': 11,
-            'confianza_promedio': config['confidence_threshold']
-        }
+
+        #Estadísticas
+        estadisticas_process = self.match_stats.get_total_stats()
+        st.session_state['estadisticas_proceso'] = estadisticas_process
+
+
+        #Estas no las pongo en función del bool porque no sabemos cual equipo es cual.
+        estadisticas_t1 = self.match.team_1.get_players_stats_sheets()
         st.session_state['estadisticas_t1'] = estadisticas_t1
-        
-        estadisticas_t2 = {
-            'jugadores_detectados': 22,
-            'precision_promedio': 0.94,
-            'frames_totales': 1500,
-            'tiempo_procesamiento': 45.2,
-            'detecciones_por_frame': 18.5,
-            'equipo_local': 11,
-            'equipo_visitante': 11,
-            'confianza_promedio': config['confidence_threshold']
-        }
+        estadisticas_t2 = self.match.team_2.get_players_stats_sheets()
         st.session_state['estadisticas_t2'] = estadisticas_t2
+
+        
+
         status_text.text('✅ Procesamiento completado!')
+        progress_bar.progress(100)
 
         # Al final, antes del return:
         st.session_state[video_key] = True
 
-        return video_anotado_path, mapa_superior_path, estadisticas_t1, estadisticas_t1
+        return video_anotado_path, mapa_superior_path, estadisticas_process, estadisticas_t1, estadisticas_t2
     
     def cleanup_temp_files(self, *file_paths):
         """Limpiar archivos temporales"""

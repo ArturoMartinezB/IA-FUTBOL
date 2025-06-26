@@ -53,3 +53,15 @@ class Player:
         print(f"Velocidad máxima: {self.max_vel:.2f} m/s")
         print("Pases: ", self.passes)
         print("Pérdidas de balón: ", self.turn_overs)
+
+    def get_stats_sheet(self):
+
+        stats_sheet = {
+            'dorsal': self.dorsal,
+            'distance': self.distance,
+            'max_velocity': self.max_vel,
+            'passes': self.passes,
+            'turnovers': self.turn_overs
+        }
+
+        return stats_sheet
