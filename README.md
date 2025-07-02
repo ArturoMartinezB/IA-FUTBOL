@@ -20,3 +20,9 @@ Sistema de análisis visual de partidos de fútbol mediante inteligencia artific
 - Python 3.10 o superior
 - pip
 - Entorno virtual recomendado
+- Los requisitos indicados en requirements.txt
+
+##   Ejecución
+
+Desde el directorio principal ejecutar: streamlit run web/app.py
+
